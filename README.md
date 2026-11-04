@@ -27,7 +27,7 @@ Para probarlo en el móvil (misma red Wi‑Fi): `npx vite --host` y abrir la IP 
 	- **Bola hundida**: la superficie forma un hoyo bajo la bola y las rayas se pegan a ella.
 	- **Estela**: un tubo por el hueco central entre rayas (`ψ ≈ 0`): recto hasta la bola y ondulado después, con las mismas ondas.
 - **Color en Three.js** (`src/shaders.js`): las rayas toman el lila del original y se oscurecen hacia arriba a la derecha; la estela pasa de rojo a rosa, naranja y amarillo según su distancia a la bola (guardada en la UV).
-- **Bola de cromo**: espejo perfecto cuyo reflejo es una `CubeCamera` que captura la propia portada cada fotograma, más un entorno de estudio solo visible para el reflejo.
+- **Bola de cromo**: espejo perfecto cuyo reflejo es una `CubeCamera` que captura la propia portada cuando cambia la inclinación, más un entorno de estudio solo visible para el reflejo.
 - **Marco como ventana**: el marco es hueco, con grosor y bisel (`ExtrudeGeometry`), y la escena queda detrás, recortada con planos de corte; al girar la portada se ve el volumen real.
 - **Efecto holo de carta**: arcoíris sutil sobre las rayas y brillo especular que sigue al puntero, según la inclinación.
 - **Banda sonora procedural** (`src/audio.js`, Web Audio API, sin archivos de audio): pad de osciladores desafinados, filtro paso bajo modulado y eco. La inclinación controla el corte del filtro y el panorama estéreo.
@@ -36,8 +36,16 @@ Para probarlo en el móvil (misma red Wi‑Fi): `npx vite --host` y abrir la IP 
 
 - Modelo comprimido con **Draco** (~300 KB); decodificador local en `public/draco/`.
 - Si los primeros 2 s van por debajo de 45 fps, baja la resolución interna.
-- Respeta `prefers-reduced-motion`: sin balanceo automático ni pulsos.
-- Controles accesibles por teclado (`S`, foco visible) y con `aria-pressed`.
+- Respeta `prefers-reduced-motion`: sin balanceo automático; también responde a cambios de la preferencia con la página abierta.
+- Controles accesibles por teclado (`S`, foco visible) y con `aria-pressed`; los atajos respetan los modificadores y los campos de texto.
+- El giroscopio necesita un navegador compatible y un contexto seguro (HTTPS o localhost). En iOS, toca la página para solicitar permiso; una IP de la red local por HTTP permite probar el puntero, pero no garantiza acceso al sensor.
+
+## Verificación
+
+```bash
+npm test
+npx vite build
+```
 
 ## Regenerar el modelo
 

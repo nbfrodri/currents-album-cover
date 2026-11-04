@@ -7,7 +7,9 @@ import { stripesShader, trailShader, glareShader, reflectionEnvShader } from "./
 const MAX_TILT = { x: 0.35, y: 0.5 }; // radianes
 const COVER = 2; // la portada mide 2x2 (igual que en Blender)
 const FLOOR_DEPTH = 0.06; // la escena queda justo detrás del marco
-const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
+let reducedMotion = motionPreference.matches;
+motionPreference.addEventListener("change", (e) => { reducedMotion = e.matches; });
 
 const canvas = document.querySelector("#scene");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -24,8 +26,6 @@ key.position.set(-2, 3, 4); // luz desde arriba a la izquierda, como en la porta
 scene.add(key);
 
 const shared = {
-	uTime: { value: 0 },
-	uMotion: { value: reducedMotion ? 0 : 1 },
 	uTilt: { value: new THREE.Vector2() },
 };
 
@@ -136,7 +136,7 @@ cover.add(glare);
 // La bola refleja la propia portada (CubeCamera), no un entorno genérico
 const reflection = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType });
 const cubeCamera = new THREE.CubeCamera(0.01, 20, reflection);
-for (const face of cubeCamera.children) face.layers.enable(1);
+cubeCamera.layers.enable(1); // las seis caras comparten estas capas
 scene.add(cubeCamera);
 
 // Entorno solo para el reflejo (capa 1: la cámara principal no lo ve); gira con la portada
@@ -164,26 +164,40 @@ const materials = { Ball: ballMaterial, Stripes: stripesMaterial, Trail: trailMa
 let ball = null;
 
 const loader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath("/draco/"));
+const modelStatus = document.querySelector("#model-status");
 loader.load("/models/currents.glb", (gltf) => {
 	const model = gltf.scene;
 	model.rotation.x = Math.PI / 2; // Blender exporta en Y-up; la portada mira a +Z
 	model.traverse((obj) => {
 		if (!obj.isMesh) return;
+		if (!materials[obj.name]) return;
 		obj.material = materials[obj.name];
 		if (obj.name === "Ball") ball = obj;
 	});
 	floor.add(model);
+	modelStatus.textContent = "";
+}, undefined, () => {
+	modelStatus.textContent = "No se pudo cargar la portada. Recarga la página para reintentar.";
 });
 
 const ambient = createAmbient();
 const soundButton = document.querySelector("#sound");
+const soundStatus = document.querySelector("#sound-status");
 async function toggleSound() {
-	soundButton.setAttribute("aria-pressed", String(await ambient.toggle()));
+	try {
+		soundButton.setAttribute("aria-pressed", String(await ambient.toggle()));
+		soundStatus.textContent = "";
+	} catch {
+		soundButton.setAttribute("aria-pressed", String(ambient.playing));
+		soundStatus.textContent = "No se pudo cambiar el sonido. Pulsa Sonido para reintentar.";
+	}
 }
 soundButton.addEventListener("click", toggleSound);
 
 window.addEventListener("keydown", (e) => {
-	if (!e.repeat && e.key.toLowerCase() === "s") toggleSound();
+	if (e.repeat || e.defaultPrevented || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
+	if (e.target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName)) return;
+	if (e.key.toLowerCase() === "s") toggleSound();
 });
 
 // Interacción: ratón, táctil y giroscopio
@@ -199,11 +213,14 @@ function setTarget(nx, ny) {
 window.addEventListener("pointermove", (e) => {
 	setTarget((e.clientX / window.innerWidth) * 2 - 1, (e.clientY / window.innerHeight) * 2 - 1);
 });
+canvas.addEventListener("pointerdown", (e) => {
+	setTarget((e.clientX / window.innerWidth) * 2 - 1, (e.clientY / window.innerHeight) * 2 - 1);
+});
 
 // beta/gamma van en ejes del dispositivo en vertical: se giran según la orientación de la pantalla
 let neutral = null;
 function onOrientation(e) {
-	if (e.gamma == null || e.beta == null) return;
+	if (!Number.isFinite(e.gamma) || !Number.isFinite(e.beta)) return;
 	const angle = screen.orientation?.angle ?? window.orientation ?? 0;
 	const rad = THREE.MathUtils.degToRad(angle);
 	const x = e.gamma * Math.cos(rad) + e.beta * Math.sin(rad);
@@ -224,15 +241,20 @@ function listenOrientation() {
 
 const DOE = window.DeviceOrientationEvent;
 if (DOE?.requestPermission) {
-	// iOS: el permiso exige un gesto de activación (click); se reintenta hasta que se conceda
+	// iOS: el permiso exige un gesto de activación; no repetir una denegación explícita.
+	let requesting = false;
 	async function askPermission() {
+		if (requesting) return;
+		requesting = true;
 		try {
-			if ((await DOE.requestPermission()) !== "granted") return;
+			const permission = await DOE.requestPermission();
+			window.removeEventListener("click", askPermission);
+			if (permission === "granted") listenOrientation();
 		} catch {
-			return;
+			// Un gesto sin activación válida permite reintentar con el siguiente click.
+		} finally {
+			requesting = false;
 		}
-		window.removeEventListener("click", askPermission);
-		listenOrientation();
 	}
 	window.addEventListener("click", askPermission);
 } else {
@@ -247,6 +269,7 @@ function resize() {
 	// encaja la portada (con margen) tanto en horizontal como en vertical
 	const fit = (COVER * 1.45) / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
 	camera.position.set(0, 0, fit / Math.min(camera.aspect, 1));
+	camera.far = Math.max(50, camera.position.z + COVER * 2);
 	camera.updateProjectionMatrix();
 }
 window.addEventListener("resize", resize);
@@ -269,9 +292,11 @@ function adaptQuality() {
 
 const idleGoal = new THREE.Vector2();
 const ballPosition = new THREE.Vector3();
-const clock = new THREE.Clock();
+const clipNormalMatrix = new THREE.Matrix3();
+let reflectedX, reflectedY;
+const startedAt = performance.now();
 renderer.setAnimationLoop(() => {
-	const t = clock.getElapsedTime();
+	const t = (performance.now() - startedAt) / 1000;
 	adaptQuality();
 	const idle = !reducedMotion && performance.now() - lastInput > 2500;
 	const goal = idle ? idleGoal.set(Math.sin(t * 0.5) * 0.35, Math.sin(t * 0.37) * 0.25) : target;
@@ -281,22 +306,26 @@ renderer.setAnimationLoop(() => {
 	cover.rotation.y = tilt.x * MAX_TILT.y;
 	cover.rotation.x = tilt.y * MAX_TILT.x;
 
-	shared.uTime.value = t;
 	shared.uTilt.value.set(cover.rotation.y, cover.rotation.x);
 	ambient.setTilt(cover.rotation.y, cover.rotation.x);
 	glareUniforms.uPointer.value.set(0.5 + tilt.x * 0.5, 0.5 - tilt.y * 0.5);
 	glareUniforms.uStrength.value = THREE.MathUtils.lerp(glareUniforms.uStrength.value, idle ? 0.08 : 0.2, 0.05);
 
 	cover.updateMatrixWorld();
-	windowPlanes.forEach((plane, i) => clipPlanes[i].copy(plane).applyMatrix4(cover.matrixWorld));
+	clipNormalMatrix.getNormalMatrix(cover.matrixWorld);
+	for (let i = 0; i < windowPlanes.length; i++) {
+		clipPlanes[i].copy(windowPlanes[i]).applyMatrix4(cover.matrixWorld, clipNormalMatrix);
+	}
 
-	if (ball) {
+	if (ball && (reflectedX !== cover.rotation.x || reflectedY !== cover.rotation.y)) {
 		// captura lo que rodea a la bola (sin la bola ni el brillo) para su reflejo
 		ball.getWorldPosition(ballPosition);
 		cubeCamera.position.copy(ballPosition);
 		ball.visible = glare.visible = false;
 		cubeCamera.update(renderer, scene);
 		ball.visible = glare.visible = true;
+		reflectedX = cover.rotation.x;
+		reflectedY = cover.rotation.y;
 	}
 
 	renderer.render(scene, camera);
