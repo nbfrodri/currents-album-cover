@@ -3,17 +3,6 @@ const common = /* glsl */ `
 	const vec2 BALL = vec2(0.53, 0.62);
 	const float BALL_R = 0.105;
 
-	float hash(vec2 p) {
-		return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-	}
-
-	float noise(vec2 p) {
-		vec2 i = floor(p);
-		vec2 f = fract(p);
-		vec2 u = f * f * (3.0 - 2.0 * f);
-		return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + 1.0), u.x), u.y);
-	}
-
 	vec3 rainbow(float t) {
 		return 0.5 + 0.5 * cos(6.28318 * (t + vec3(0.0, 0.33, 0.67)));
 	}
@@ -46,7 +35,8 @@ const meshVertex = /* glsl */ `
 // Iluminación común de las piezas modeladas en Blender: difusa + especular, luz arriba a la izquierda
 const lighting = /* glsl */ `
 	vec3 shade(vec3 base, vec3 n, vec3 v, float gloss) {
-		vec3 l = normalize(vec3(-0.45, 0.55, 0.9));
+		// La luz permanece en el mundo también al capturar las seis caras del reflejo.
+		vec3 l = normalize(mat3(viewMatrix) * vec3(-0.45, 0.55, 0.9));
 		float diffuse = 0.45 + 0.55 * max(dot(n, l), 0.0);
 		float spec = pow(max(dot(reflect(-l, n), v), 0.0), 28.0) * gloss;
 		return base * diffuse + spec;

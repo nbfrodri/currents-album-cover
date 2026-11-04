@@ -42,6 +42,10 @@ body {
 	opacity: 0.55;
 }
 
+.caption [role="status"]:empty {
+	display: none;
+}
+
 .controls {
 	position: fixed;
 	top: 20px;

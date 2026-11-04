@@ -63,10 +63,12 @@ export function createAmbient() {
 		}));
 	}
 
-	function setTilt(x, y) {
-		tiltX = clamp(x);
-		tiltY = clamp(y);
-		if (!active) return;
+	function setTilt(x, y, force = false) {
+		const nextX = clamp(x), nextY = clamp(y);
+		const changed = nextX !== tiltX || nextY !== tiltY;
+		tiltX = nextX;
+		tiltY = nextY;
+		if (!active || (!changed && !force)) return;
 		const now = context.currentTime;
 		filter.frequency.setTargetAtTime(900 * 2 ** (tiltY * 2), now, 0.3);
 		pan.pan.setTargetAtTime(tiltX * 1.4, now, 0.3);
@@ -85,11 +87,21 @@ export function createAmbient() {
 	}
 
 	async function change() {
-		if (!context) initialize();
+		if (!context) {
+			try {
+				initialize();
+			} catch (error) {
+				// Descarta también los osciladores de una inicialización incompleta.
+				await context?.close().catch(() => {});
+				context = null;
+				throw error;
+			}
+		}
 		if (!active) {
 			await context.resume();
+			if (context.state !== "running") throw new Error("No se pudo activar el audio");
 			active = true;
-			setTilt(tiltX, tiltY);
+			setTilt(tiltX, tiltY, true);
 			const now = context.currentTime;
 			master.gain.cancelScheduledValues(now);
 			master.gain.setValueAtTime(0, now);
@@ -99,21 +111,24 @@ export function createAmbient() {
 			return true;
 		}
 		clearInterval(timer);
+		active = false;
 		const now = context.currentTime;
 		// cancelAndHoldAtTime no existe en Firefox: fijamos a mano el valor actual
+		const gain = master.gain.value;
 		master.gain.cancelScheduledValues(now);
-		master.gain.setValueAtTime(master.gain.value, now);
+		master.gain.setValueAtTime(gain, now);
 		master.gain.linearRampToValueAtTime(0, now + 1.5);
 		await new Promise((resolve) => setTimeout(resolve, 1550));
 		await context.suspend();
-		active = false;
 		return false;
 	}
 
 	return {
 		async toggle() {
 			// Serializa pulsaciones rápidas para no suspender un nuevo arranque.
-			while (transition) await transition;
+			while (transition) {
+				try { await transition; } catch { /* La siguiente pulsación puede reintentar. */ }
+			}
 			transition = change();
 			try {
 				return await transition;
