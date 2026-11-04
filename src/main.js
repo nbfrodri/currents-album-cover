@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { createAmbient } from "./audio.js";
-import { surfaceShader, trailShader, glareShader, reflectionEnvShader } from "./shaders.js";
+import { stripesShader, trailShader, glareShader, reflectionEnvShader } from "./shaders.js";
 
 const MAX_TILT = { x: 0.35, y: 0.5 }; // radianes
 const COVER = 2; // la portada mide 2x2 (igual que en Blender)
@@ -60,12 +60,10 @@ const frame = new THREE.Mesh(
 frame.position.z = -0.14; // cara frontal (con bisel) justo detrás de la superficie
 cover.add(frame);
 
-const surface = new THREE.Mesh(
-	new THREE.PlaneGeometry(COVER, COVER),
-	new THREE.ShaderMaterial({ ...surfaceShader, uniforms: shared }),
-);
-surface.position.z = 0.001;
-cover.add(surface);
+// Fondo negro entre las rayas (las rayas, la estela y la bola vienen de Blender)
+const base = new THREE.Mesh(new THREE.PlaneGeometry(COVER, COVER), new THREE.MeshBasicMaterial({ color: 0x080310 }));
+base.position.z = -0.001;
+cover.add(base);
 
 // Texto naranja de la banda superior, en una capa propia para que flote con el parallax
 function titleTexture() {
@@ -121,25 +119,21 @@ const reflectionEnv = new THREE.Mesh(
 reflectionEnv.layers.set(1);
 cover.add(reflectionEnv);
 
+// Cromo: espejo perfecto (sin rugosidad) que refleja la portada y el entorno de estudio
 const ballMaterial = new THREE.MeshStandardMaterial({
 	color: 0xffffff,
 	metalness: 1,
-	roughness: 0.04,
+	roughness: 0,
 	envMap: reflection.texture,
-	envMapIntensity: 1.25,
+	envMapIntensity: 1.3,
 });
-const trailMaterial = new THREE.ShaderMaterial({
-	...trailShader,
-	uniforms: {
-		uTilt: shared.uTilt,
-		uStart: { value: new THREE.Color(0.92, 0.08, 0.18) },
-		uMid: { value: new THREE.Color(0.95, 0.1, 0.2) },
-		uEnd: { value: new THREE.Color(1.0, 0.3, 0.55) },
-	},
-});
+const stripesMaterial = new THREE.ShaderMaterial({ ...stripesShader, uniforms: { uTilt: shared.uTilt } });
+const trailMaterial = new THREE.ShaderMaterial({ ...trailShader, uniforms: { uTilt: shared.uTilt } });
+const materials = { Ball: ballMaterial, Stripes: stripesMaterial, Trail: trailMaterial };
 
-// Piezas cuya profundidad se amplía en el modo despiece (baseZ: altura de referencia)
+// Modo despiece: el texto y la bola se separan y el relieve de rayas y estela se exagera
 const depthNodes = [{ obj: title, baseZ: 0.12, origin: title.position.z, axis: "z" }];
+const reliefNodes = [];
 let ball = null;
 
 const loader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath("/draco/"));
@@ -148,11 +142,14 @@ loader.load("/models/currents.glb", (gltf) => {
 	model.rotation.x = Math.PI / 2; // Blender exporta en Y-up; la portada mira a +Z
 	model.traverse((obj) => {
 		if (!obj.isMesh) return;
-		const isBall = obj.name === "Ball";
-		obj.material = isBall ? ballMaterial : trailMaterial;
-		if (isBall) ball = obj;
+		obj.material = materials[obj.name];
 		// en el GLB el eje Y local es la profundidad (Z de Blender)
-		depthNodes.push({ obj, baseZ: isBall ? obj.position.y : 0.03, origin: obj.position.y, axis: "y" });
+		if (obj.name === "Ball") {
+			ball = obj;
+			depthNodes.push({ obj, baseZ: 0.25, origin: obj.position.y, axis: "y" });
+		} else {
+			reliefNodes.push(obj);
+		}
 	});
 	cover.add(model);
 });
@@ -273,6 +270,7 @@ renderer.setAnimationLoop(() => {
 
 	depth = THREE.MathUtils.lerp(depth, depthGoal, 0.06);
 	for (const { obj, baseZ, origin, axis } of depthNodes) obj.position[axis] = origin + baseZ * (depth - 1);
+	for (const obj of reliefNodes) obj.scale.y = depth;
 
 	cover.rotation.y = tilt.x * MAX_TILT.y;
 	cover.rotation.x = tilt.y * MAX_TILT.x;
