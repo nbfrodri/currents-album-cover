@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { createAmbient } from "./audio.js";
 import { linesShader, foilShader, glareShader } from "./shaders.js";
 
 const MAX_TILT = { x: 0.35, y: 0.5 }; // radianes
@@ -115,8 +116,18 @@ function toggleDepth() {
 	depthButton.setAttribute("aria-pressed", String(depthGoal !== 1));
 }
 depthButton.addEventListener("click", toggleDepth);
+const ambient = createAmbient();
+const soundButton = document.querySelector("#sound");
+async function toggleSound() {
+	soundButton.setAttribute("aria-pressed", String(await ambient.toggle()));
+}
+soundButton.addEventListener("click", toggleSound);
+
 window.addEventListener("keydown", (e) => {
-	if (e.key.toLowerCase() === "p") toggleDepth();
+	if (e.repeat) return;
+	const key = e.key.toLowerCase();
+	if (key === "p") toggleDepth();
+	if (key === "s") toggleSound();
 });
 
 const key = new THREE.DirectionalLight(0xffe2f0, 1.5);
@@ -206,6 +217,7 @@ renderer.setAnimationLoop(() => {
 
 	shared.uTime.value = t;
 	shared.uTilt.value.set(cover.rotation.y, cover.rotation.x);
+	ambient.setTilt(cover.rotation.y, cover.rotation.x);
 	glareUniforms.uPointer.value.set(0.5 + tilt.x * 0.5, 0.5 - tilt.y * 0.5);
 	glareUniforms.uStrength.value = THREE.MathUtils.lerp(glareUniforms.uStrength.value, idle ? 0.12 : 0.3, 0.05);
 

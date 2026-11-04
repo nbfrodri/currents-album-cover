@@ -100,7 +100,9 @@ export function createAmbient() {
 		}
 		clearInterval(timer);
 		const now = context.currentTime;
-		master.gain.cancelAndHoldAtTime(now);
+		// cancelAndHoldAtTime no existe en Firefox: fijamos a mano el valor actual
+		master.gain.cancelScheduledValues(now);
+		master.gain.setValueAtTime(master.gain.value, now);
 		master.gain.linearRampToValueAtTime(0, now + 1.5);
 		await new Promise((resolve) => setTimeout(resolve, 1550));
 		await context.suspend();

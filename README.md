@@ -18,6 +18,7 @@ Para probarlo en el móvil (misma red Wi‑Fi): `npx vite --host` y abrir la IP 
 |---|---|
 | Mover el ratón / inclinar el móvil | Gira la portada |
 | Botón **Profundidad** o tecla `P` | Separa las capas para ver el volumen |
+| Botón **Sonido** o tecla `S` | Activa/desactiva la banda sonora ambiental |
 | Sin interacción 2,5 s | Balanceo automático |
 
 ## Técnicas
@@ -27,6 +28,7 @@ Para probarlo en el móvil (misma red Wi‑Fi): `npx vite --host` y abrir la IP 
 - **Shader iridiscente de las líneas** (`src/shaders.js`): el color sale de una rampa cálida (naranja → rojo → magenta) desplazada por el **término de Fresnel**, el ángulo de inclinación y la posición en la línea (UV generadas en Blender). Un pulso animado recorre cada corriente.
 - **Lámina holográfica**: degradado de fondo + bandas arcoíris y destellos cuya intensidad depende de la inclinación, como el *foil* de una carta.
 - **Brillo especular** que sigue al puntero (plano aditivo) y **bola cromada** con `MeshPhysicalMaterial` (metal + iridiscencia) iluminada por un `RoomEnvironment`.
+- **Banda sonora procedural** (`src/audio.js`, Web Audio API, sin archivos de audio): pad de osciladores desafinados con una progresión lenta de acordes, filtro paso bajo modulado y eco con realimentación. La inclinación de la portada controla el corte del filtro (eje vertical) y el panorama estéreo (eje horizontal).
 - **Marco con grosor** (`ExtrudeGeometry` con bisel) para que se lea como objeto físico.
 
 ## Rendimiento y accesibilidad
@@ -54,5 +56,6 @@ blender/currents.py   generador procedural + exportación GLB
 public/models/        modelo exportado
 public/draco/         decodificador Draco
 src/main.js           escena, interacción y bucle
+src/audio.js          banda sonora ambiental procedural
 src/shaders.js        shaders de líneas, lámina y brillo
 ```
