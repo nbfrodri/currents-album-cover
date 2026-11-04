@@ -23,17 +23,18 @@ Para probarlo en el móvil (misma red Wi‑Fi): `npx vite --host` y abrir la IP 
 
 ## Técnicas
 
-- **Líneas de corriente físicas** (`blender/currents.py`): las líneas son la solución del *flujo potencial alrededor de un cilindro*, `ψ = y · (1 − R² / r²)`. Para cada valor de ψ se busca `y(x)` por bisección, se rota el campo en diagonal, se recorta al cuadrado de la portada y se convierte en tubos con `bmesh`.
-- **Capas para el parallax**: las líneas se reparten en 4 capas (`Layer_0..3`) a distintas profundidades y la bola queda por delante. La cámara en perspectiva produce el parallax real al girar; el modo *Profundidad* multiplica esas distancias.
-- **Shader iridiscente de las líneas** (`src/shaders.js`): el color sale de una rampa cálida (naranja → rojo → magenta) desplazada por el **término de Fresnel**, el ángulo de inclinación y la posición en la línea (UV generadas en Blender). Un pulso animado recorre cada corriente.
-- **Lámina holográfica**: degradado de fondo + bandas arcoíris y destellos cuya intensidad depende de la inclinación, como el *foil* de una carta.
-- **Brillo especular** que sigue al puntero (plano aditivo) y **bola cromada** con `MeshPhysicalMaterial` (metal + iridiscencia) iluminada por un `RoomEnvironment`.
-- **Banda sonora procedural** (`src/audio.js`, Web Audio API, sin archivos de audio): pad de osciladores desafinados con una progresión lenta de acordes, filtro paso bajo modulado y eco con realimentación. La inclinación de la portada controla el corte del filtro (eje vertical) y el panorama estéreo (eje horizontal).
+- **Superficie de rayas** (`src/shaders.js`, `surfaceShader`): ~70 rayas negras y lila calculadas en el shader como *líneas de corriente* de un flujo potencial alrededor de la bola, `ψ = d⊥ · (1 − R² / r²)`. Son rectas y paralelas a la trayectoria hasta llegar a la bola; detrás, una estela en abanico deforma el dominio con ondas que viajan aguas abajo y ruido, como en el original.
+- **Canal de la estela**: las rayas se apartan alrededor de `ψ ≈ 0` dejando un hueco por el que pasa la bola: rojo antes de llegar y rosa → naranja → amarillo después, siguiendo las mismas ondas.
+- **Modelado en Blender** (`blender/currents.py`): la bola y el tramo recto de la estela como tubo 3D apoyado sobre el canal, con posiciones medidas sobre la portada original y exportados a GLB.
+- **Reflejo real de la bola**: una `CubeCamera` captura cada fotograma la portada que rodea a la bola, más un entorno solo visible para el reflejo (suelo de rayas, cielo oscuro y una ventana de luz arriba a la izquierda).
+- **Parallax por capas**: superficie, estela, bola y texto están a distintas profundidades; la cámara en perspectiva produce el parallax al girar y el modo *Profundidad* multiplica esas distancias.
+- **Efecto holo de carta**: arcoíris sutil sobre las rayas claras y brillo especular que sigue al puntero, ambos dependientes de la inclinación.
+- **Banda sonora procedural** (`src/audio.js`, Web Audio API, sin archivos de audio): pad de osciladores desafinados, filtro paso bajo modulado y eco. La inclinación controla el corte del filtro y el panorama estéreo.
 - **Marco con grosor** (`ExtrudeGeometry` con bisel) para que se lea como objeto físico.
 
 ## Rendimiento y accesibilidad
 
-- Modelo comprimido con **Draco** (707 KB → 58 KB); decodificador local en `public/draco/`.
+- Modelo comprimido con **Draco** (~16 KB); decodificador local en `public/draco/`.
 - Si los primeros 2 s van por debajo de 45 fps, baja la resolución interna.
 - Respeta `prefers-reduced-motion`: sin balanceo automático ni pulsos.
 - Controles accesibles por teclado (`P`, foco visible) y con `aria-pressed`.
@@ -57,5 +58,5 @@ public/models/        modelo exportado
 public/draco/         decodificador Draco
 src/main.js           escena, interacción y bucle
 src/audio.js          banda sonora ambiental procedural
-src/shaders.js        shaders de líneas, lámina y brillo
+src/shaders.js        shaders de la superficie, la estela, el reflejo y el brillo
 ```

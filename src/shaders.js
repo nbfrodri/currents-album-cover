@@ -1,25 +1,122 @@
-// Arcoíris holográfico (estilo Inigo Quilez) para la lámina de fondo.
-const palette = /* glsl */ `
-	vec3 palette(float t) {
-		return vec3(0.6, 0.38, 0.5) + vec3(0.4, 0.35, 0.4) * cos(6.28318 * (t + vec3(0.0, 0.15, 0.3)));
+// Coordenadas "de imagen": (0,0) arriba a la izquierda, (1,1) abajo a la derecha, como la portada original.
+const common = /* glsl */ `
+	const vec2 BALL = vec2(0.53, 0.62);
+	const float BALL_R = 0.105;
+
+	float hash(vec2 p) {
+		return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+	}
+
+	float noise(vec2 p) {
+		vec2 i = floor(p);
+		vec2 f = fract(p);
+		vec2 u = f * f * (3.0 - 2.0 * f);
+		return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + 1.0), u.x), u.y);
+	}
+
+	vec3 rainbow(float t) {
+		return 0.5 + 0.5 * cos(6.28318 * (t + vec3(0.0, 0.33, 0.67)));
 	}
 `;
 
-// Rampa cíclica cálida de Currents para las líneas: naranja → rojo → magenta → naranja.
-const warm = /* glsl */ `
-	vec3 warm(float t) {
-		t = fract(t) * 3.0;
-		vec3 orange = vec3(1.0, 0.52, 0.12);
-		vec3 red = vec3(0.95, 0.16, 0.18);
-		vec3 magenta = vec3(0.85, 0.22, 0.65);
-		if (t < 1.0) return mix(orange, red, t);
-		if (t < 2.0) return mix(red, magenta, t - 1.0);
-		return mix(magenta, orange, t - 2.0);
+const planeVertex = /* glsl */ `
+	varying vec2 vUv;
+	void main() {
+		vUv = uv;
+		gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 	}
 `;
 
-// Líneas de corriente: iridiscencia según el ángulo de visión + pulso que recorre cada línea.
-export const linesShader = {
+// Superficie de rayas: rectas hasta la bola, onduladas detrás de ella, y un canal entre rayas
+// por donde pasa la bola (rojo antes de llegar, rosa → amarillo después).
+export const surfaceShader = {
+	vertexShader: planeVertex,
+	fragmentShader: /* glsl */ `
+		uniform float uTime;
+		uniform float uMotion;
+		uniform vec2 uTilt;
+		varying vec2 vUv;
+		${common}
+
+		// Trayectoria: de la esquina superior izquierda (0,0) al centro de la bola
+		const vec2 DIR = vec2(0.6498, 0.7601);
+		const vec2 PERP = vec2(-0.7601, 0.6498);
+
+		// Cuánto se ondula cada punto: nada antes de la bola, un abanico que se abre detrás
+		float wake(vec2 p) {
+			vec2 rel = p - BALL;
+			float along = dot(rel, DIR);
+			float across = dot(rel, PERP);
+			float spread = 0.06 + 1.1 * max(along, 0.0);
+			float fan = exp(-pow(across / spread, 2.0));
+			return smoothstep(-0.06, 0.12, along) * fan;
+		}
+
+		void main() {
+			vec2 p = vec2(vUv.x, 1.0 - vUv.y);
+			float t = uTime * uMotion;
+			float w = wake(p);
+			float along0 = dot(p - BALL, DIR);
+
+			// Ondas que viajan aguas abajo + irregularidad de ruido, solo en la estela
+			float n = noise(p * 5.0 + vec2(0.0, t * 0.05));
+			vec2 q = p + PERP * w * 0.032 * sin(along0 * 34.0 - t * 0.8 + n * 6.0);
+			q += w * 0.03 * (vec2(noise(q * 13.0 - t * 0.04), noise(q * 13.0 + 5.7 + t * 0.04)) - 0.5) * 2.0;
+
+			// Función de corriente: rayas paralelas a la trayectoria que rodean la bola
+			vec2 rel = q - BALL;
+			float along = dot(rel, DIR);
+			float r2 = max(dot(rel, rel), 1e-4);
+			float psi = dot(rel, PERP) * (1.0 - BALL_R * BALL_R / r2);
+
+			// Canal: las rayas se apartan dejando un hueco que se ensancha cerca de la bola
+			float gap = along < 0.0
+				? mix(0.004, 0.011, smoothstep(-0.8, -0.05, along))
+				: mix(0.009, 0.006, smoothstep(0.0, 0.4, along));
+			float aa = fwidth(psi) * 1.2;
+			// psi = 0 también en el contorno de la bola: el canal se limita al eje de la trayectoria
+			float onAxis = 1.0 - smoothstep(0.025, 0.045, abs(dot(rel, PERP)));
+			float channel = (1.0 - smoothstep(gap - aa, gap + aa, abs(psi))) * onAxis;
+
+			float f = sign(psi) * max(abs(psi) - gap, 0.0) * 70.0;
+			float tri = abs(fract(f) - 0.5) * 2.0;
+			float faa = fwidth(f) * 1.5;
+			float stripe = smoothstep(0.5 - faa, 0.5 + faa, tri); // 1 = raya lila, 0 = raya negra
+
+			// Lila que se oscurece hacia arriba a la derecha (la superficie se aleja)
+			float far = smoothstep(0.35, 1.15, p.x * 0.75 + (1.0 - p.y) * 0.7);
+			vec3 lilac = mix(vec3(0.8, 0.68, 0.95), vec3(0.2, 0.09, 0.3), far);
+			vec3 ink = vec3(0.035, 0.015, 0.05);
+
+			// Efecto holo de carta: arcoíris sutil sobre las rayas claras al inclinar
+			float tilt = clamp(length(uTilt) * 2.5, 0.0, 1.0);
+			vec3 holo = rainbow(p.x * 0.8 + p.y * 0.5 + uTilt.x * 1.2 - uTilt.y * 0.8);
+			lilac += holo * tilt * 0.14 * (1.0 - far);
+			vec3 color = mix(ink, lilac, stripe);
+
+			// Color del canal: rojo hasta la bola, luego rosa → naranja → amarillo
+			vec3 red = vec3(0.92, 0.08, 0.18);
+			vec3 pink = vec3(1.0, 0.3, 0.55);
+			vec3 orange = vec3(1.0, 0.55, 0.1);
+			vec3 yellow = vec3(1.0, 0.82, 0.25);
+			vec3 trail = along < 0.0
+				? mix(red, pink, smoothstep(-0.2, 0.0, along))
+				: mix(mix(pink, orange, smoothstep(0.0, 0.18, along)), yellow, smoothstep(0.18, 0.45, along));
+			color = mix(color, trail, channel);
+
+			// Sombra de contacto de la bola (luz desde arriba a la izquierda)
+			float shadow = 1.0 - smoothstep(BALL_R * 0.5, BALL_R * 1.5, length((p - BALL - vec2(0.025, 0.035)) * vec2(1.0, 1.3)));
+			color *= 1.0 - shadow * 0.7;
+
+			// Banda oscura superior, donde va el texto
+			color *= mix(0.12, 1.0, smoothstep(0.0, 0.09, p.y));
+			gl_FragColor = vec4(color, 1.0);
+		}
+	`,
+};
+
+// Estela: degradado a lo largo del tubo (UV.x) entre dos o tres colores + brillo de Fresnel.
+export const trailShader = {
 	vertexShader: /* glsl */ `
 		varying vec3 vNormal;
 		varying vec3 vView;
@@ -33,65 +130,57 @@ export const linesShader = {
 		}
 	`,
 	fragmentShader: /* glsl */ `
-		uniform float uTime;
+		uniform vec3 uStart;
+		uniform vec3 uMid;
+		uniform vec3 uEnd;
 		uniform vec2 uTilt;
-		uniform float uPulse;
 		varying vec3 vNormal;
 		varying vec3 vView;
 		varying vec2 vUv;
-		${warm}
 		void main() {
 			vec3 n = normalize(vNormal);
-			float facing = max(dot(n, normalize(vView)), 0.0);
-			float fresnel = pow(1.0 - facing, 2.0);
-			float hue = vUv.y * 0.6 + vUv.x * 0.15 + dot(uTilt, vec2(0.9, 0.7)) + fresnel * 0.35;
-			vec3 color = warm(hue);
-			float light = 0.55 + 0.45 * max(dot(n, normalize(vec3(0.3, 0.5, 1.0))), 0.0);
-			float wave = sin((vUv.x * 5.0 - uTime * 0.35 + vUv.y * 11.0) * 6.28318) * 0.5 + 0.5;
-			float pulse = smoothstep(0.93, 1.0, wave) * uPulse;
-			gl_FragColor = vec4(color * light + fresnel * 0.35 + pulse * 0.5, 1.0);
+			float fresnel = pow(1.0 - max(dot(n, normalize(vView)), 0.0), 2.0);
+			float t = vUv.x;
+			vec3 color = t < 0.5 ? mix(uStart, uMid, t * 2.0) : mix(uMid, uEnd, t * 2.0 - 2.0 * 0.5);
+			float light = 0.7 + 0.3 * max(dot(n, normalize(vec3(-0.4, 0.5, 1.0))), 0.0);
+			// el brillo del borde cambia de tono con la inclinación (iridiscencia)
+			vec3 sheen = 0.5 + 0.5 * cos(6.28318 * (fresnel + uTilt.x - uTilt.y + vec3(0.0, 0.33, 0.67)));
+			gl_FragColor = vec4(color * light + sheen * fresnel * 0.35, 1.0);
 		}
 	`,
 };
 
-// Fondo de la portada: degradado + lámina holográfica (bandas arcoíris y destellos) que reacciona a la inclinación.
-export const foilShader = {
+// Entorno que solo ve el reflejo de la bola: suelo de rayas lila, cielo oscuro y una ventana de luz
+// arriba a la izquierda, como el estudio que refleja la bola del original.
+export const reflectionEnvShader = {
 	vertexShader: /* glsl */ `
-		varying vec2 vUv;
+		varying vec3 vDir;
 		void main() {
-			vUv = uv;
+			vDir = normalize(position);
 			gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 		}
 	`,
 	fragmentShader: /* glsl */ `
-		uniform float uTime;
-		uniform vec2 uTilt;
-		varying vec2 vUv;
-		${palette}
-		float hash(vec2 p) {
-			return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-		}
+		varying vec3 vDir;
 		void main() {
-			vec3 base = mix(vec3(0.07, 0.01, 0.13), vec3(0.3, 0.05, 0.32), smoothstep(-0.1, 1.3, vUv.x * 0.6 + vUv.y * 0.8));
-			float tilt = clamp(length(uTilt) * 2.5, 0.0, 1.0);
-			float bands = sin((vUv.x + vUv.y) * 16.0 + (uTilt.x - uTilt.y) * 14.0) * 0.5 + 0.5;
-			vec3 rainbow = palette(vUv.x * 0.7 + vUv.y * 0.3 + uTilt.x * 0.9 + uTilt.y * 0.6);
-			vec3 color = base + rainbow * bands * (0.06 + 0.22 * tilt);
-
-			vec2 cell = floor(vUv * 140.0);
-			float spark = step(0.985, hash(cell));
-			float twinkle = sin(hash(cell + 7.0) * 40.0 + (uTilt.x + uTilt.y) * 30.0 + uTime) * 0.5 + 0.5;
-			color += spark * twinkle * tilt * 0.6;
-
-			float vignette = smoothstep(1.0, 0.35, length(vUv - 0.5) * 1.3);
-			gl_FragColor = vec4(color * (0.55 + 0.45 * vignette), 1.0);
+			vec3 d = normalize(vDir);
+			// en el espacio de la portada, -z es "debajo" de la superficie y +z es el cielo
+			float floorAmt = 1.0 - smoothstep(-0.35, 0.15, d.z);
+			float stripes = smoothstep(0.0, 0.2, sin((d.x * 0.75 - d.y * 0.65) * 70.0));
+			vec3 floorCol = mix(vec3(0.05, 0.02, 0.07), vec3(0.75, 0.62, 0.9), stripes);
+			// oscuro arriba, gris claro abajo (como el cromo del original)
+			vec3 sky = mix(vec3(0.04, 0.035, 0.05), vec3(0.62, 0.6, 0.66), 1.0 - smoothstep(-0.7, 0.6, d.y));
+			vec3 color = mix(sky, floorCol, floorAmt);
+			float window = smoothstep(0.93, 0.985, dot(d, normalize(vec3(-0.5, 0.6, 0.62))));
+			color += vec3(1.0, 0.96, 1.0) * window * 3.0;
+			gl_FragColor = vec4(color, 1.0);
 		}
 	`,
 };
 
 // Brillo especular que sigue al puntero, como el reflejo sobre una carta plastificada.
 export const glareShader = {
-	vertexShader: foilShader.vertexShader,
+	vertexShader: planeVertex,
 	fragmentShader: /* glsl */ `
 		uniform vec2 uPointer;
 		uniform float uStrength;
