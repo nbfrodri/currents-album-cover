@@ -7,6 +7,7 @@ import * as shaders from "../src/shaders.js";
 
 function setup(orientation) {
 	const listeners = new Map();
+	const stats = { toggles: 0, resets: 0 };
 	const elements = new Map();
 	const element = () => ({
 		setAttribute(name, value) { this[name] = value; },
@@ -37,13 +38,19 @@ function setup(orientation) {
 	class Loader {
 		setDRACOLoader() { return this; }
 		setDecoderPath() { return this; }
-		load() {}
+		load() { return new THREE.Texture(); }
 	}
-	const stats = { toggles: 0 };
+	class Controls {
+		constructor(camera) { this.camera = camera; this.listeners = {}; }
+		addEventListener(name, callback) { this.listeners[name] = callback; }
+		update() {}
+		saveState() {}
+		reset() { stats.resets++; }
+	}
 	const source = readFileSync(new URL("../src/main.js", import.meta.url), "utf8").replace(/^import .*;\n/gm, "");
 	const context = vm.createContext({
-		THREE: { ...THREE, WebGLRenderer: Renderer }, ...shaders,
-		GLTFLoader: Loader, DRACOLoader: Loader,
+		THREE: { ...THREE, WebGLRenderer: Renderer, TextureLoader: Loader }, ...shaders,
+		GLTFLoader: Loader, DRACOLoader: Loader, OrbitControls: Controls,
 		createAmbient: () => ({ setTilt() {}, playing: false, toggle: async () => ++stats.toggles > 0 }),
 		window, document, screen: {}, performance, console,
 	});
@@ -56,7 +63,7 @@ test("la cámara conserva la portada dentro del plano lejano en ventanas estrech
 	app.window.innerWidth = 80;
 	app.window.innerHeight = 1600;
 	app.run("resize()");
-	assert.ok(app.run("camera.far > camera.position.z + COVER"));
+	assert.ok(app.run("camera.far > controls.maxDistance + COVER"));
 });
 
 test("los atajos no interceptan combinaciones del navegador ni campos de texto", () => {
@@ -67,6 +74,8 @@ test("los atajos no interceptan combinaciones del navegador ni campos de texto",
 	assert.equal(app.stats.toggles, 0);
 	key({ key: "s" });
 	assert.equal(app.stats.toggles, 1);
+	key({ key: "r" });
+	assert.equal(app.stats.resets, 1);
 });
 
 test("los planos conservan el interior y recortan el exterior al inclinar", () => {
@@ -76,13 +85,14 @@ test("los planos conservan el interior y recortan el exterior al inclinar", () =
 	assert.equal(app.run(`clipPlanes.some((plane) => plane.distanceToPoint(new THREE.Vector3(1.1, 0, 0).applyMatrix4(cover.matrixWorld)) < 0)`), true);
 });
 
-test("el reflejo se reutiliza en reposo y se actualiza al cambiar la inclinación", () => {
+test("mientras se arrastra la cámara, el puntero no inclina la portada", () => {
 	const app = setup();
-	app.run("ball = new THREE.Mesh(); floor.add(ball); let captures = 0; cubeCamera.update = () => { captures++; }; renderer.frame(); renderer.frame();");
-	assert.equal(app.run("captures"), 1);
-	app.run("setTarget(1, 0); renderer.frame()");
-	assert.equal(app.run("captures"), 2);
-	assert.equal(app.run("cubeCamera.children.every((face) => face.layers.isEnabled(0) && face.layers.isEnabled(1))"), true);
+	app.run("controls.listeners.start()");
+	app.listeners.get("pointermove")({ clientX: 1200, clientY: 0 });
+	assert.equal(app.run("target.x"), 0);
+	app.run("controls.listeners.end()");
+	app.listeners.get("pointermove")({ clientX: 1200, clientY: 0 });
+	assert.equal(app.run("target.x"), 1);
 });
 
 test("el permiso de iOS no se duplica ni se vuelve a solicitar tras denegarlo", async () => {
@@ -101,9 +111,9 @@ test("el permiso de iOS no se duplica ni se vuelve a solicitar tras denegarlo", 
 	assert.equal(app.listeners.has("deviceorientation"), false);
 });
 
-test("el puntero inicial funciona y las lecturas inválidas del sensor se ignoran", () => {
+test("el puntero inclina la portada y las lecturas inválidas del sensor se ignoran", () => {
 	const app = setup();
-	app.elements.get("#scene").pointerdown({ clientX: 1200, clientY: 0 });
+	app.listeners.get("pointermove")({ clientX: 1200, clientY: 0 });
 	assert.equal(app.run("target.x"), 1);
 	assert.equal(app.run("target.y"), -1);
 	app.run("onOrientation({ beta: NaN, gamma: Infinity })");

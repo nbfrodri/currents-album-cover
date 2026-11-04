@@ -1,12 +1,13 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { createAmbient } from "./audio.js";
-import { stripesShader, trailShader, glareShader, reflectionEnvShader } from "./shaders.js";
+import { glareShader } from "./shaders.js";
 
 const MAX_TILT = { x: 0.35, y: 0.5 }; // radianes
 const COVER = 2; // la portada mide 2x2 (igual que en Blender)
-const FLOOR_DEPTH = 0.06; // la escena queda justo detrás del marco
+const FLOOR_DEPTH = 0.14; // la superficie queda dentro de la caja del marco; el relieve y el texto suben hasta su borde
 const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
 let reducedMotion = motionPreference.matches;
 motionPreference.addEventListener("change", (e) => { reducedMotion = e.matches; });
@@ -20,16 +21,25 @@ renderer.localClippingEnabled = true;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 50);
 
+// Cámara libre: arrastrar gira, la rueda (o pellizcar) acerca y el botón derecho (o dos dedos) desplaza
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.rotateSpeed = 0.45;
+controls.minAzimuthAngle = -1.4; // sin llegar a ver la portada por detrás
+controls.maxAzimuthAngle = 1.4;
+controls.minPolarAngle = 0.17;
+controls.maxPolarAngle = Math.PI - 0.17;
+let dragging = false;
+controls.addEventListener("start", () => (dragging = true));
+controls.addEventListener("end", () => (dragging = false));
+
 scene.add(new THREE.HemisphereLight(0xd8c8ff, 0x1a0820, 1.2));
 const key = new THREE.DirectionalLight(0xfff0f8, 1.5);
 key.position.set(-2, 3, 4); // luz desde arriba a la izquierda, como en la portada
 scene.add(key);
 
-const shared = {
-	uTilt: { value: new THREE.Vector2() },
-};
-
-// Portada: marco, superficie de rayas, texto, modelo de Blender y brillo
+// Portada: marco, modelo de Blender (rayas, estela, bola, fondo y texto) y brillo
 const cover = new THREE.Group();
 scene.add(cover);
 
@@ -79,45 +89,6 @@ const floor = new THREE.Group();
 floor.position.z = -FLOOR_DEPTH;
 cover.add(floor);
 
-// Fondo negro entre las rayas (las rayas, la estela y la bola vienen de Blender)
-const base = new THREE.Mesh(
-	new THREE.PlaneGeometry(COVER * 3, COVER * 3),
-	new THREE.MeshBasicMaterial({ color: 0x080310, clippingPlanes: clipPlanes }),
-);
-base.position.z = -0.12; // por debajo del hoyo de la bola
-floor.add(base);
-
-// Texto naranja de la banda superior, en una capa propia para que flote con el parallax
-function titleTexture() {
-	const c = document.createElement("canvas");
-	c.width = 2048;
-	c.height = 144;
-	const ctx = c.getContext("2d");
-	// franja oscura bajo el texto, como el borde superior del original
-	const shade = ctx.createLinearGradient(0, 0, 0, c.height);
-	shade.addColorStop(0, "rgba(6, 2, 10, 0.95)");
-	shade.addColorStop(1, "rgba(6, 2, 10, 0)");
-	ctx.fillStyle = shade;
-	ctx.fillRect(0, 0, c.width, c.height);
-	ctx.fillStyle = "#f2992e";
-	ctx.font = "800 58px 'Helvetica Neue', Arial, sans-serif";
-	ctx.textBaseline = "middle";
-	ctx.letterSpacing = "2px";
-	ctx.fillText("TAME IMPALA", 52, 72);
-	ctx.textAlign = "right";
-	ctx.fillText("CURRENTS", 2048 - 52, 72);
-	const texture = new THREE.CanvasTexture(c);
-	texture.colorSpace = THREE.SRGBColorSpace;
-	texture.anisotropy = 4;
-	return texture;
-}
-const title = new THREE.Mesh(
-	new THREE.PlaneGeometry(COVER, (COVER * 144) / 2048),
-	new THREE.MeshBasicMaterial({ map: titleTexture(), transparent: true, toneMapped: false }),
-);
-title.position.set(0, COVER / 2 - (COVER * 144) / 2048 / 2, 0.04);
-cover.add(title);
-
 const glareUniforms = { uPointer: { value: new THREE.Vector2(0.5, 0.5) }, uStrength: { value: 0 } };
 const glare = new THREE.Mesh(
 	new THREE.PlaneGeometry(COVER, COVER),
@@ -133,33 +104,10 @@ glare.position.z = 0.6;
 glare.renderOrder = 1;
 cover.add(glare);
 
-// La bola refleja la propia portada (CubeCamera), no un entorno genérico
-const reflection = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType });
-const cubeCamera = new THREE.CubeCamera(0.01, 20, reflection);
-cubeCamera.layers.enable(1); // las seis caras comparten estas capas
-scene.add(cubeCamera);
-
-// Entorno solo para el reflejo (capa 1: la cámara principal no lo ve); gira con la portada
-const reflectionEnv = new THREE.Mesh(
-	new THREE.SphereGeometry(8, 32, 16),
-	new THREE.ShaderMaterial({ ...reflectionEnvShader, side: THREE.BackSide, depthWrite: false }),
-);
-reflectionEnv.layers.set(1);
-cover.add(reflectionEnv);
-
-// Cromo: espejo perfecto (sin rugosidad) que refleja la portada y el entorno de estudio
-const ballMaterial = new THREE.MeshStandardMaterial({
-	color: 0xffffff,
-	metalness: 1,
-	roughness: 0,
-	envMap: reflection.texture,
-	envMapIntensity: 1.3,
-	clippingPlanes: clipPlanes,
-});
-const clipped = { clipping: true, clippingPlanes: clipPlanes };
-const stripesMaterial = new THREE.ShaderMaterial({ ...stripesShader, ...clipped, uniforms: { uTilt: shared.uTilt } });
-const trailMaterial = new THREE.ShaderMaterial({ ...trailShader, ...clipped, uniforms: { uTilt: shared.uTilt } });
-const materials = { Ball: ballMaterial, Stripes: stripesMaterial, Trail: trailMaterial };
+// Reflejo del cromo: panorámica renderizada en Blender desde el centro de la bola
+const ballEnv = new THREE.TextureLoader().load("/models/ball_env.jpg");
+ballEnv.mapping = THREE.EquirectangularReflectionMapping;
+ballEnv.colorSpace = THREE.SRGBColorSpace;
 
 let ball = null;
 
@@ -170,9 +118,13 @@ loader.load("/models/currents.glb", (gltf) => {
 	model.rotation.x = Math.PI / 2; // Blender exporta en Y-up; la portada mira a +Z
 	model.traverse((obj) => {
 		if (!obj.isMesh) return;
-		if (!materials[obj.name]) return;
-		obj.material = materials[obj.name];
-		if (obj.name === "Ball") ball = obj;
+		// materiales y colores vienen de Blender; aquí solo se recortan al marco
+		obj.material.clippingPlanes = clipPlanes;
+		if (obj.name === "Ball") {
+			ball = obj;
+			obj.material.envMap = ballEnv;
+			obj.material.envMapIntensity = 1.0;
+		}
 	});
 	floor.add(model);
 	modelStatus.textContent = "";
@@ -197,7 +149,9 @@ soundButton.addEventListener("click", toggleSound);
 window.addEventListener("keydown", (e) => {
 	if (e.repeat || e.defaultPrevented || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
 	if (e.target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName)) return;
-	if (e.key.toLowerCase() === "s") toggleSound();
+	const k = e.key.toLowerCase();
+	if (k === "s") toggleSound();
+	if (k === "r") controls.reset();
 });
 
 // Interacción: ratón, táctil y giroscopio
@@ -210,10 +164,9 @@ function setTarget(nx, ny) {
 	lastInput = performance.now();
 }
 
+// El hover inclina la portada (efecto carta); mientras se arrastra manda la cámara
 window.addEventListener("pointermove", (e) => {
-	setTarget((e.clientX / window.innerWidth) * 2 - 1, (e.clientY / window.innerHeight) * 2 - 1);
-});
-canvas.addEventListener("pointerdown", (e) => {
+	if (dragging) return;
 	setTarget((e.clientX / window.innerWidth) * 2 - 1, (e.clientY / window.innerHeight) * 2 - 1);
 });
 
@@ -261,16 +214,26 @@ if (DOE?.requestPermission) {
 	listenOrientation();
 }
 
+document.querySelector("#reset").addEventListener("click", () => controls.reset());
+
 // Bucle
+let framed = false;
 function resize() {
 	const { innerWidth: w, innerHeight: h } = window;
 	renderer.setSize(w, h, false);
 	camera.aspect = w / h;
-	// encaja la portada (con margen) tanto en horizontal como en vertical
-	const fit = (COVER * 1.45) / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-	camera.position.set(0, 0, fit / Math.min(camera.aspect, 1));
-	camera.far = Math.max(50, camera.position.z + COVER * 2);
+	// distancia que encaja la portada (con margen) tanto en horizontal como en vertical
+	const fit = (COVER * 1.45) / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / Math.min(camera.aspect, 1);
+	controls.minDistance = fit * 0.35;
+	controls.maxDistance = fit * 2.5;
+	camera.far = Math.max(50, controls.maxDistance + COVER * 2);
 	camera.updateProjectionMatrix();
+	if (!framed) {
+		// solo la primera vez: después se respeta el zoom del usuario
+		camera.position.set(0, 0, fit);
+		controls.saveState();
+		framed = true;
+	}
 }
 window.addEventListener("resize", resize);
 resize();
@@ -291,22 +254,19 @@ function adaptQuality() {
 }
 
 const idleGoal = new THREE.Vector2();
-const ballPosition = new THREE.Vector3();
 const clipNormalMatrix = new THREE.Matrix3();
-let reflectedX, reflectedY;
 const startedAt = performance.now();
 renderer.setAnimationLoop(() => {
 	const t = (performance.now() - startedAt) / 1000;
 	adaptQuality();
-	const idle = !reducedMotion && performance.now() - lastInput > 2500;
+	controls.update();
+	const idle = !reducedMotion && !dragging && performance.now() - lastInput > 2500;
 	const goal = idle ? idleGoal.set(Math.sin(t * 0.5) * 0.35, Math.sin(t * 0.37) * 0.25) : target;
 	tilt.lerp(goal, idle ? 0.02 : 0.08);
-
 
 	cover.rotation.y = tilt.x * MAX_TILT.y;
 	cover.rotation.x = tilt.y * MAX_TILT.x;
 
-	shared.uTilt.value.set(cover.rotation.y, cover.rotation.x);
 	ambient.setTilt(cover.rotation.y, cover.rotation.x);
 	glareUniforms.uPointer.value.set(0.5 + tilt.x * 0.5, 0.5 - tilt.y * 0.5);
 	glareUniforms.uStrength.value = THREE.MathUtils.lerp(glareUniforms.uStrength.value, idle ? 0.08 : 0.2, 0.05);
@@ -317,16 +277,8 @@ renderer.setAnimationLoop(() => {
 		clipPlanes[i].copy(windowPlanes[i]).applyMatrix4(cover.matrixWorld, clipNormalMatrix);
 	}
 
-	if (ball && (reflectedX !== cover.rotation.x || reflectedY !== cover.rotation.y)) {
-		// captura lo que rodea a la bola (sin la bola ni el brillo) para su reflejo
-		ball.getWorldPosition(ballPosition);
-		cubeCamera.position.copy(ballPosition);
-		ball.visible = glare.visible = false;
-		cubeCamera.update(renderer, scene);
-		ball.visible = glare.visible = true;
-		reflectedX = cover.rotation.x;
-		reflectedY = cover.rotation.y;
-	}
+	// el entorno del reflejo gira con la portada
+	if (ball) ball.material.envMapRotation.copy(cover.rotation);
 
 	renderer.render(scene, camera);
 });

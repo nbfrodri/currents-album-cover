@@ -1,14 +1,17 @@
-"""Genera en 3D la portada 'Currents' y la exporta a public/models/currents.glb.
+"""Genera en Blender la portada 'Currents' completa y la exporta a public/models/currents.glb.
 
-Todo lo que tiene forma se modela aquí; Three.js solo pone color, luz e interacción.
-- Stripes: ~100 rayas lila como tubos planos. Siguen las líneas de corriente de un flujo potencial
-  alrededor de la bola, psi = d_perp * (1 - R^2 / r^2): rectas hasta la bola y, detrás de ella,
-  deformadas en el plano y en altura por ondas (relieve real, como un líquido).
-- Trail: la estela que ocupa el hueco central entre rayas (psi = 0): recta hasta la bola y
-  ondulada después, con las mismas ondas que las rayas.
-- Ball: la bola cromada apoyada sobre la superficie.
+Referencia: la portada original de Robert Beatty. Toda la portada se hace aquí (forma, color,
+materiales y texto); la web solo la carga y añade la interacción.
+- Stripes: ~100 rayas lila (tubos planos) que siguen las líneas de corriente de un flujo potencial
+  alrededor de la bola, psi = d_perp * (1 - R^2 / r^2): rectas hasta la bola y onduladas detrás,
+  en el plano y en altura. El color (lila que se oscurece arriba a la derecha) va en sus vértices.
+- Trail: una sola línea por el hueco central (psi = 0), a ras de las rayas: hilo rojo fino y recto,
+  mancha rosa al llegar a la bola, pasa por debajo y sale como cola ondulada naranja y amarilla.
+- Ball: bola de cromo gris satinado hundida en un hoyo de la superficie.
+- Title: "TAME IMPALA" y "CURRENTS" en naranja.
+- public/models/ball_env.jpg: panorámica renderizada desde el centro de la bola (rayas, cielo de
+  estudio y una ventana de luz arriba a la izquierda) que la web usa como reflejo del cromo.
 Coordenadas de cálculo "de imagen" (0..1, y hacia abajo), medidas sobre la portada original.
-UV de rayas = posición en la imagen; UV.x de la estela = distancia a la bola a lo largo de la trayectoria.
 Ejecutar desde Blender: CURRENTS_PATH = ".../blender/currents.py"; exec(open(CURRENTS_PATH).read())
 """
 import math
@@ -16,10 +19,12 @@ import os
 
 import bmesh
 import bpy
-from mathutils import Vector, noise
+from mathutils import Matrix, Vector, noise
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__ if "__file__" in globals() else CURRENTS_PATH)))
 OUT = os.path.join(ROOT, "public", "models", "currents.glb")
+ENV_OUT = os.path.join(ROOT, "public", "models", "ball_env.jpg")
+FONT = "/usr/share/fonts/liberation/LiberationSans-Bold.ttf"
 
 BALL = Vector((0.53, 0.62))  # imagen
 BALL_R = 0.105  # imagen (la portada mide 1)
@@ -31,15 +36,58 @@ GAP = 0.008  # medio hueco central (psi) por donde pasa la estela
 STRIPE_WIDTH = 0.0088  # ancho de cada raya lila (imagen)
 STRIPE_HEIGHT = 0.0035  # grosor de cada raya (imagen)
 WAVE_AMP = 0.03  # amplitud lateral de las ondas (imagen)
-WAVE_LIFT = 0.022  # amplitud en altura de las ondas (imagen)
+WAVE_LIFT = 0.055  # amplitud en altura de las ondas (imagen): relieve visible al girar
 SIDES = 6
 FLOW_R = BALL_R * 0.85  # radio del flujo: algo menor que la bola para que las rayas se peguen a ella
-DENT = 0.05  # profundidad del hoyo que hace la bola en la superficie (imagen)
+DENT = 0.075  # profundidad del hoyo que hace la bola en la superficie (imagen)
 DENT_WIDTH = 0.11  # alcance del hoyo desde el centro de la bola (imagen)
 SINK = 0.45  # altura del centro de la bola sobre el fondo del hoyo, en radios
+TITLE_LIFT = 0.07  # el texto flota por delante de la superficie (imagen): capa propia para el parallax
+TRAIL_THIN = 0.0032  # medio ancho del hilo rojo (imagen)
+SMEAR = 0.2  # distancia antes de la bola en la que el hilo se abre en una mancha rosa (imagen)
+SMEAR_WIDTH = 0.026  # medio ancho de la mancha junto a la bola (imagen)
+TAIL_WIDTH = 0.012  # medio ancho de la cola ondulada (imagen)
 # Se modela con un pequeño margen fuera de la portada: al girarla, el marco de la web recorta lo que sobra
 DOMAIN_X = (-0.06, 1.06)
 DOMAIN_Y = (-0.06, 1.06)
+
+# Colores tomados de la portada original (sRGB)
+LILAC_NEAR = (0.8, 0.68, 0.95)
+LILAC_FAR = (0.2, 0.09, 0.3)
+RED = (0.95, 0.08, 0.18)
+PINK = (1.0, 0.3, 0.55)
+ORANGE = (1.0, 0.55, 0.1)
+YELLOW = (1.0, 0.82, 0.25)
+TITLE_ORANGE = (0.95, 0.6, 0.18)
+
+
+def smoothstep(e0, e1, x):
+	t = min(max((x - e0) / (e1 - e0), 0.0), 1.0)
+	return t * t * (3 - 2 * t)
+
+
+def mix(a, b, t):
+	return tuple(x + (y - x) * t for x, y in zip(a, b))
+
+
+def to_linear(c):
+	"""sRGB → lineal (los colores de vértice y de material de Blender son lineales)."""
+	return tuple(x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c)
+
+
+def stripe_color(uv):
+	"""Lila que se oscurece hacia arriba a la derecha, como la superficie que se aleja del original."""
+	x, y = uv
+	far = smoothstep(0.35, 1.15, x * 0.75 + (1 - y) * 0.7)
+	return mix(LILAC_NEAR, LILAC_FAR, far)
+
+
+def trail_color(uv):
+	"""Rojo hasta la bola, rosa al rodearla, naranja y amarillo en la cola (uv.x = avance)."""
+	a = uv[0]
+	if a < 0:
+		return mix(RED, PINK, smoothstep(-0.25, -0.05, a))
+	return mix(mix(PINK, ORANGE, smoothstep(0.14, 0.26, a)), YELLOW, smoothstep(0.26, 0.5, a))
 
 
 def along_across(p):
@@ -52,8 +100,7 @@ def wake(p):
 	a, c = along_across(p)
 	spread = 0.06 + 1.1 * max(a, 0.0)
 	fan = math.exp(-((c / spread) ** 2))
-	t = min(max((a + 0.06) / 0.18, 0.0), 1.0)
-	return t * t * (3 - 2 * t) * fan
+	return smoothstep(-0.06, 0.12, a) * fan
 
 
 def warp(p):
@@ -93,8 +140,8 @@ def across_for(a, c):
 
 def along_samples():
 	"""Pocas muestras en el tramo recto, muchas cerca de la bola y en la estela."""
-	upstream = [-2.0 + (1.85 * i / 34) for i in range(34)]
-	downstream = [-0.15 + (1.45 * i / 320) for i in range(321)]
+	upstream = [-1.3 + (1.15 * i / 24) for i in range(24)]
+	downstream = [-0.15 + (1.05 * i / 260) for i in range(261)]
 	return upstream + downstream
 
 
@@ -107,7 +154,7 @@ def to_world(p, lift=0.0):
 
 
 def edge_point(a, b):
-	"""Punto donde el segmento a→b (uno dentro, otro fuera) cruza el borde de la portada."""
+	"""Punto donde el segmento a→b (uno dentro, otro fuera) cruza el borde."""
 	lo, hi = (0.0, 1.0) if inside(a[0]) else (1.0, 0.0)
 	for _ in range(24):
 		mid = (lo + hi) / 2
@@ -120,7 +167,7 @@ def edge_point(a, b):
 
 
 def clip_runs(points):
-	"""Divide una polilínea en tramos dentro de la portada, cortados justo en el borde."""
+	"""Divide una polilínea en tramos dentro del dominio, cortados justo en el borde."""
 	runs, run = [], []
 	for prev, item in zip([None, *points], points):
 		if inside(item[0]):
@@ -162,12 +209,22 @@ def add_tube(bm, uv_layer, run, half_w, half_h, uv_of):
 				loop[uv_layer].uv = uv
 
 
-def finish_mesh(name, bm, mat):
+def paint(mesh, color_of):
+	"""Color de vértice (por esquina) calculado a partir de la UV."""
+	attr = mesh.color_attributes.new("Col", "FLOAT_COLOR", "CORNER")
+	uvs = mesh.uv_layers.active.data
+	for i, loop_uv in enumerate(uvs):
+		attr.data[i].color = (*to_linear(color_of(loop_uv.uv)), 1.0)
+
+
+def finish_mesh(name, bm, mat, color_of=None):
 	bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
 	mesh = bpy.data.meshes.new(name)
 	bm.to_mesh(mesh)
 	bm.free()
 	mesh.shade_smooth()
+	if color_of:
+		paint(mesh, color_of)
 	mesh.materials.append(mat)
 	obj = bpy.data.objects.new(name, mesh)
 	bpy.context.collection.objects.link(obj)
@@ -178,7 +235,6 @@ def build_stripes(mat):
 	bm = bmesh.new()
 	uv_layer = bm.loops.layers.uv.new("UVMap")
 	samples = along_samples()
-	count = 0
 	for side in (-1, 1):
 		k = 0
 		while True:
@@ -188,56 +244,98 @@ def build_stripes(mat):
 				break
 			line = []
 			for a in samples:
-				b = across_for(a, c)
-				p = BALL + DIR * a + PERP * b
+				p = BALL + DIR * a + PERP * across_for(a, c)
 				q, lift = warp(p)
 				line.append((q, lift + dent(p), 0.0))
 			for run in clip_runs(line):
 				add_tube(bm, uv_layer, run, lambda _: STRIPE_WIDTH / 2, STRIPE_HEIGHT / 2, lambda p, _: (p.x, p.y))
-				count += 1
-	print("stripes:", count)
-	return finish_mesh("Stripes", bm, mat)
+	return finish_mesh("Stripes", bm, mat, stripe_color)
 
 
 def trail_width(a):
-	"""Medio ancho de la estela (imagen): se ensancha al acercarse a la bola."""
+	"""Medio ancho de la estela (imagen), medido sobre la portada original: hilo rojo muy fino,
+	mancha rosa que se abre al llegar a la bola y cola ancha al salir por debajo."""
+	if a < -SMEAR:
+		return TRAIL_THIN
 	if a < 0:
-		return 0.005 + 0.012 * max(0.0, 1 + a / 0.35) ** 2
-	return 0.01
+		return TRAIL_THIN + (SMEAR_WIDTH - TRAIL_THIN) * smoothstep(-SMEAR, -BALL_R * 0.6, a)
+	return TAIL_WIDTH + (SMEAR_WIDTH - TAIL_WIDTH) * (1 - smoothstep(BALL_R, BALL_R + 0.08, a))
 
 
 def build_trail(mat):
-	"""Estela por el hueco central: recta hasta el borde de la bola, ondulada después."""
+	"""Una sola línea por el hueco central (psi = 0), pintada a ras de las rayas: entra recta por la
+	esquina, pasa por debajo de la bola y sale por abajo ondulada con las mismas ondas."""
 	bm = bmesh.new()
 	uv_layer = bm.loops.layers.uv.new("UVMap")
 	start = BALL.length + 0.1  # empieza justo fuera de la portada, arriba a la izquierda
-	upstream = [-start + (start - FLOW_R) * i / 50 for i in range(51)]
-	downstream = [FLOW_R + 1.3 * i / 300 for i in range(301)]
-	for part in (upstream, downstream):
-		line = []
-		for a in part:
-			p = BALL + DIR * a
-			q, lift = warp(p)
-			line.append((q, lift + dent(p) + 0.001, a))
-		for run in clip_runs(line):
-			add_tube(bm, uv_layer, run, trail_width, 0.0018, lambda _, a: (a, 0.0))
-	return finish_mesh("Trail", bm, mat)
+	steps = [-start + (start + 1.3) * i / 520 for i in range(521)]
+	line = []
+	for a in steps:
+		p = BALL + DIR * a
+		q, lift = warp(p)
+		line.append((q, lift + dent(p) + 0.0006, a))  # a ras de las rayas, apenas por encima
+	for run in clip_runs(line):
+		add_tube(bm, uv_layer, run, trail_width, STRIPE_HEIGHT / 2, lambda _, a: (a, 0.0))
+	return finish_mesh("Trail", bm, mat, trail_color)
 
 
-def material(name, color, metallic, roughness):
+def vertex_color_material(name, roughness):
+	mat = bpy.data.materials.new(name)
+	mat.use_nodes = True
+	nodes = mat.node_tree.nodes
+	bsdf = next(n for n in nodes if n.type == "BSDF_PRINCIPLED")
+	col = nodes.new("ShaderNodeVertexColor")
+	col.layer_name = "Col"
+	mat.node_tree.links.new(col.outputs["Color"], bsdf.inputs["Base Color"])
+	bsdf.inputs["Roughness"].default_value = roughness
+	return mat
+
+
+def material(name, color, metallic, roughness, emission=0.0):
 	mat = bpy.data.materials.new(name)
 	mat.use_nodes = True
 	bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
-	bsdf.inputs["Base Color"].default_value = (*color, 1)
+	bsdf.inputs["Base Color"].default_value = (*to_linear(color), 1)
 	bsdf.inputs["Metallic"].default_value = metallic
 	bsdf.inputs["Roughness"].default_value = roughness
+	if emission:
+		bsdf.inputs["Emission Color"].default_value = (*to_linear(color), 1)
+		bsdf.inputs["Emission Strength"].default_value = emission
 	return mat
+
+
+def build_title():
+	"""Texto naranja de la banda superior, como en la portada, convertido a malla."""
+	mat = material("Title", TITLE_ORANGE, 0.0, 0.5, emission=1.0)
+	font = bpy.data.fonts.load(FONT, check_existing=True) if os.path.exists(FONT) else None
+	parts = []
+	for body, x, align in (("TAME IMPALA", 0.035, "LEFT"), ("CURRENTS", 0.965, "RIGHT")):
+		bpy.ops.object.text_add(location=to_world(Vector((x, 0.042)), TITLE_LIFT))
+		obj = bpy.context.active_object
+		obj.data.body = body
+		obj.data.align_x = align
+		obj.data.size = 0.062
+		obj.data.extrude = 0.003
+		if font:
+			obj.data.font = font
+		parts.append(obj)
+	bpy.ops.object.select_all(action="DESELECT")
+	for obj in parts:
+		obj.select_set(True)
+	bpy.context.view_layer.objects.active = parts[0]
+	bpy.ops.object.convert(target="MESH")
+	bpy.ops.object.join()
+	title = bpy.context.active_object
+	title.name = "Title"
+	title.data.name = "Title"
+	title.data.materials.clear()
+	title.data.materials.append(mat)
 
 
 def clear_scene():
 	for ob in list(bpy.data.objects):
 		bpy.data.objects.remove(ob, do_unlink=True)
-	for coll in (bpy.data.meshes, bpy.data.materials, bpy.data.cameras, bpy.data.lights):
+	for coll in (bpy.data.meshes, bpy.data.materials, bpy.data.cameras, bpy.data.lights, bpy.data.curves):
 		for item in list(coll):
 			if item.users == 0:
 				coll.remove(item)
@@ -245,8 +343,8 @@ def clear_scene():
 
 def build():
 	clear_scene()
-	build_stripes(material("Stripes", (0.75, 0.62, 0.9), 0.0, 0.5))
-	build_trail(material("Trail", (0.95, 0.12, 0.2), 0.0, 0.3))
+	build_stripes(vertex_color_material("Stripes", 0.5))
+	build_trail(vertex_color_material("Trail", 0.35))
 
 	radius = BALL_R * 2
 	center = to_world(BALL)
@@ -256,19 +354,87 @@ def build():
 	)
 	ball = bpy.context.active_object
 	ball.name = "Ball"
-	ball.data.materials.append(material("Chrome", (0.95, 0.95, 0.97), 1.0, 0.02))
+	# cromo gris satinado (no espejo): metálico con algo de rugosidad, el entorno se difumina
+	ball.data.materials.append(material("Chrome", (0.66, 0.66, 0.7), 1.0, 0.3))
 	bpy.ops.object.shade_smooth()
 
-	# fondo negro solo para previsualizar en Blender (en Three.js lo pone la escena)
-	bpy.ops.mesh.primitive_plane_add(size=4, location=(0, 0, -DENT * 2 - 0.01))
-	bpy.context.active_object.name = "PreviewBase"
-	bpy.context.active_object.data.materials.append(material("Ink", (0.02, 0.01, 0.03), 0.0, 0.9))
+	build_title()
+
+
+def render_ball_env():
+	"""Panorámica desde el centro de la bola: lo que reflejará el cromo en la web.
+	Orientación (convenio equirectangular de Three.js): arriba = +Y de la portada, centro = +X."""
+	scene = bpy.context.scene
+	ball = bpy.data.objects["Ball"]
+	ball.hide_render = True
+	studio = []
+
+	# cielo de estudio como en el original, en vertical de la portada (eje Y): lila abajo (las rayas),
+	# gris claro en el centro y oscuro arriba.
+	world = bpy.data.worlds.new("StudioSky")
+	world.use_nodes = True
+	nodes, links = world.node_tree.nodes, world.node_tree.links
+	bg = next(n for n in nodes if n.type == "BACKGROUND")
+	geo = nodes.new("ShaderNodeTexCoord")
+	sep = nodes.new("ShaderNodeSeparateXYZ")
+	ramp = nodes.new("ShaderNodeValToRGB")
+	ramp.color_ramp.elements[0].position = 0.1
+	ramp.color_ramp.elements[0].color = (*to_linear((0.62, 0.5, 0.78)), 1)
+	middle = ramp.color_ramp.elements.new(0.45)
+	middle.color = (*to_linear((0.86, 0.85, 0.89)), 1)
+	ramp.color_ramp.elements[2].position = 0.9
+	ramp.color_ramp.elements[2].color = (*to_linear((0.26, 0.25, 0.29)), 1)
+	remap = nodes.new("ShaderNodeMath")
+	remap.operation = "MULTIPLY_ADD"  # Y (-1..1) → 0..1
+	remap.inputs[1].default_value = 0.5
+	remap.inputs[2].default_value = 0.5
+	links.new(geo.outputs["Generated"], sep.inputs[0])
+	links.new(sep.outputs["Y"], remap.inputs[0])
+	links.new(remap.outputs["Value"], ramp.inputs["Fac"])
+	links.new(ramp.outputs["Color"], bg.inputs["Color"])
+	scene.world = world
+
+	# ventana de luz arriba a la izquierda (el brillo principal de la bola en el original)
+	bpy.ops.mesh.primitive_circle_add(vertices=48, radius=1.1, fill_type="NGON", location=(-1.6, 1.4, 2.6))
+	softbox = bpy.context.active_object
+	direction = Vector(ball.location) - softbox.location
+	softbox.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
+	softbox.data.materials.append(material("Softbox", (1, 1, 1), 0.0, 1.0, emission=6.0))
+	studio.append(softbox)
+
+	bpy.ops.object.camera_add(location=ball.location)
+	cam = bpy.context.active_object
+	cam.data.type = "PANO"
+	cam.data.panorama_type = "EQUIRECTANGULAR"
+	# ejes locales de la cámara en el mundo: X → +Z, Y → +Y (arriba de la imagen), -Z → +X (centro)
+	cam.rotation_euler = Matrix(((0, 0, -1), (0, 1, 0), (1, 0, 0))).to_euler()
+	studio.append(cam)
+
+	previous = (scene.render.engine, scene.camera, scene.render.resolution_x, scene.render.resolution_y)
+	try:
+		scene.render.engine = "CYCLES"
+	except TypeError:
+		pass
+	scene.cycles.samples = 48
+	scene.render.resolution_x, scene.render.resolution_y = 1024, 512
+	scene.render.resolution_percentage = 100
+	scene.render.image_settings.file_format = "JPEG"
+	scene.render.image_settings.quality = 90
+	scene.camera = cam
+	scene.render.filepath = ENV_OUT
+	bpy.ops.render.render(write_still=True)
+	print("ball env", ENV_OUT, os.path.getsize(ENV_OUT), "bytes")
+
+	scene.render.engine, scene.camera, scene.render.resolution_x, scene.render.resolution_y = previous
+	for obj in studio:
+		bpy.data.objects.remove(obj, do_unlink=True)
+	ball.hide_render = False
 
 
 def export():
 	os.makedirs(os.path.dirname(OUT), exist_ok=True)
 	bpy.ops.object.select_all(action="DESELECT")
-	for name in ("Ball", "Stripes", "Trail"):
+	for name in ("Ball", "Stripes", "Trail", "Title"):
 		bpy.data.objects[name].select_set(True)
 	bpy.ops.export_scene.gltf(
 		filepath=OUT,
@@ -283,3 +449,4 @@ def export():
 
 build()
 export()
+render_ball_env()
