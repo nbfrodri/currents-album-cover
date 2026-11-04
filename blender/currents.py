@@ -413,8 +413,8 @@ def render_ball_env():
 	previous = (scene.render.engine, scene.camera, scene.render.resolution_x, scene.render.resolution_y)
 	try:
 		scene.render.engine = "CYCLES"
-	except TypeError:
-		pass
+	except TypeError as error:  # el mensaje enumera los motores disponibles
+		raise RuntimeError(f"Se necesita Cycles para la panorámica del reflejo: {error}") from error
 	scene.cycles.samples = 48
 	scene.render.resolution_x, scene.render.resolution_y = 1024, 512
 	scene.render.resolution_percentage = 100
