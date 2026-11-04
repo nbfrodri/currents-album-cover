@@ -21,7 +21,7 @@ const shared = {
 	uTilt: { value: new THREE.Vector2() },
 };
 
-// --- Portada: marco + lámina holo + modelo de Blender + brillo ---
+// Portada: marco + lámina holo + modelo de Blender + brillo
 const cover = new THREE.Group();
 scene.add(cover);
 
@@ -99,7 +99,7 @@ const key = new THREE.DirectionalLight(0xffe2f0, 1.5);
 key.position.set(2, 3, 4);
 scene.add(key);
 
-// --- Interacción: ratón, táctil y giroscopio ---
+// Interacción: ratón, táctil y giroscopio
 const target = new THREE.Vector2(); // inclinación deseada, en [-1, 1]
 const tilt = new THREE.Vector2();
 let lastInput = -Infinity;
@@ -138,7 +138,7 @@ if (!window.DeviceOrientationEvent?.requestPermission) {
 	window.addEventListener("deviceorientation", onOrientation);
 }
 
-// --- Bucle ---
+// Bucle
 function resize() {
 	const { innerWidth: w, innerHeight: h } = window;
 	renderer.setSize(w, h, false);
