@@ -1,10 +1,13 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { linesShader, foilShader, glareShader } from "./shaders.js";
 
 const MAX_TILT = { x: 0.35, y: 0.5 }; // radianes
 const COVER = 2; // la portada mide 2x2 (igual que en Blender)
+const MAX_DEPTH = 4; // multiplicador de profundidad en el modo "despiece"
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const canvas = document.querySelector("#scene");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -19,6 +22,7 @@ const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 50);
 const shared = {
 	uTime: { value: 0 },
 	uTilt: { value: new THREE.Vector2() },
+	uPulse: { value: reducedMotion ? 0 : 1 },
 };
 
 // Portada: marco + lámina holo + modelo de Blender + brillo
@@ -85,14 +89,34 @@ const ballMaterial = new THREE.MeshPhysicalMaterial({
 	iridescenceThicknessRange: [200, 800],
 });
 
-new GLTFLoader().load("/models/currents.glb", (gltf) => {
+// Capas cuya profundidad se amplía en el modo despiece; baseZ es su profundidad en Blender
+const depthNodes = [];
+
+const loader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath("/draco/"));
+loader.load("/models/currents.glb", (gltf) => {
 	const model = gltf.scene;
 	model.rotation.x = Math.PI / 2; // Blender exporta en Y-up; la portada mira a +Z
 	model.traverse((obj) => {
 		if (!obj.isMesh) return;
-		obj.material = obj.name.startsWith("Layer_") ? linesMaterial : ballMaterial;
+		const isLayer = obj.name.startsWith("Layer_");
+		obj.material = isLayer ? linesMaterial : ballMaterial;
+		// en el GLB el eje Y local es la profundidad (Z de Blender)
+		const baseZ = isLayer ? 0.02 + Number(obj.name.slice(6)) * 0.06 : obj.position.y;
+		depthNodes.push({ obj, baseZ, origin: obj.position.y });
 	});
 	cover.add(model);
+});
+
+let depth = 1;
+let depthGoal = 1;
+const depthButton = document.querySelector("#depth");
+function toggleDepth() {
+	depthGoal = depthGoal === 1 ? MAX_DEPTH : 1;
+	depthButton.setAttribute("aria-pressed", String(depthGoal !== 1));
+}
+depthButton.addEventListener("click", toggleDepth);
+window.addEventListener("keydown", (e) => {
+	if (e.key.toLowerCase() === "p") toggleDepth();
 });
 
 const key = new THREE.DirectionalLight(0xffe2f0, 1.5);
@@ -151,12 +175,31 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
+// Si los primeros segundos van lentos, baja la resolución interna
+let frames = 0;
+let slowSince = performance.now();
+function adaptQuality() {
+	if (frames === -1) return;
+	frames++;
+	const elapsed = performance.now() - slowSince;
+	if (elapsed < 2000) return;
+	if (frames / (elapsed / 1000) < 45 && renderer.getPixelRatio() > 1) {
+		renderer.setPixelRatio(1);
+		resize();
+	}
+	frames = -1;
+}
+
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
 	const t = clock.getElapsedTime();
-	const idle = performance.now() - lastInput > 2500;
+	adaptQuality();
+	const idle = !reducedMotion && performance.now() - lastInput > 2500;
 	const goal = idle ? new THREE.Vector2(Math.sin(t * 0.5) * 0.35, Math.sin(t * 0.37) * 0.25) : target;
 	tilt.lerp(goal, idle ? 0.02 : 0.08);
+
+	depth = THREE.MathUtils.lerp(depth, depthGoal, 0.06);
+	for (const { obj, baseZ, origin } of depthNodes) obj.position.y = origin + baseZ * (depth - 1);
 
 	cover.rotation.y = tilt.x * MAX_TILT.y;
 	cover.rotation.x = tilt.y * MAX_TILT.x;

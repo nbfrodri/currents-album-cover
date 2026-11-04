@@ -152,7 +152,7 @@ def export():
 	for ob in bpy.data.objects:
 		if ob.type == "MESH":
 			ob.select_set(True)
-	bpy.ops.export_scene.gltf(filepath=OUT, export_format="GLB", use_selection=True, export_yup=True)
+	bpy.ops.export_scene.gltf(filepath=OUT, export_format="GLB", use_selection=True, export_yup=True, export_draco_mesh_compression_enable=True)
 	print("exported", OUT, os.path.getsize(OUT), "bytes")
 
 
