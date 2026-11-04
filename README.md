@@ -23,18 +23,20 @@ Para probarlo en el móvil (misma red Wi‑Fi): `npx vite --host` y abrir la IP 
 
 ## Técnicas
 
-- **Superficie de rayas** (`src/shaders.js`, `surfaceShader`): ~70 rayas negras y lila calculadas en el shader como *líneas de corriente* de un flujo potencial alrededor de la bola, `ψ = d⊥ · (1 − R² / r²)`. Son rectas y paralelas a la trayectoria hasta llegar a la bola; detrás, una estela en abanico deforma el dominio con ondas que viajan aguas abajo y ruido, como en el original.
-- **Canal de la estela**: las rayas se apartan alrededor de `ψ ≈ 0` dejando un hueco por el que pasa la bola: rojo antes de llegar y rosa → naranja → amarillo después, siguiendo las mismas ondas.
-- **Modelado en Blender** (`blender/currents.py`): la bola y el tramo recto de la estela como tubo 3D apoyado sobre el canal, con posiciones medidas sobre la portada original y exportados a GLB.
-- **Reflejo real de la bola**: una `CubeCamera` captura cada fotograma la portada que rodea a la bola, más un entorno solo visible para el reflejo (suelo de rayas, cielo oscuro y una ventana de luz arriba a la izquierda).
-- **Parallax por capas**: superficie, estela, bola y texto están a distintas profundidades; la cámara en perspectiva produce el parallax al girar y el modo *Profundidad* multiplica esas distancias.
-- **Efecto holo de carta**: arcoíris sutil sobre las rayas claras y brillo especular que sigue al puntero, ambos dependientes de la inclinación.
+- **Todo el relieve se modela en Blender** (`blender/currents.py`):
+	- **Rayas**: ~100 rayas lila como tubos planos que siguen las *líneas de corriente* de un flujo potencial alrededor de la bola, `ψ = d⊥ · (1 − R² / r²)` (se resuelve `ψ = cte` por bisección). Son rectas hasta la bola; detrás, ondas y ruido las deforman en el plano y en altura, como un líquido.
+	- **Bola hundida**: la superficie forma un hoyo bajo la bola y las rayas se pegan a ella.
+	- **Estela**: un tubo por el hueco central entre rayas (`ψ ≈ 0`): recto hasta la bola y ondulado después, con las mismas ondas.
+- **Color en Three.js** (`src/shaders.js`): las rayas toman el lila del original y se oscurecen hacia arriba a la derecha; la estela pasa de rojo a rosa, naranja y amarillo según su distancia a la bola (guardada en la UV).
+- **Bola de cromo**: espejo perfecto cuyo reflejo es una `CubeCamera` que captura la propia portada cada fotograma, más un entorno de estudio solo visible para el reflejo.
+- **Marco como ventana**: el marco es hueco, con grosor y bisel (`ExtrudeGeometry`), y la escena queda detrás, recortada con planos de corte; al girar la portada se ve el volumen real.
+- **Modo Profundidad**: exagera el relieve (ondas y hoyo) y hace flotar el texto.
+- **Efecto holo de carta**: arcoíris sutil sobre las rayas y brillo especular que sigue al puntero, según la inclinación.
 - **Banda sonora procedural** (`src/audio.js`, Web Audio API, sin archivos de audio): pad de osciladores desafinados, filtro paso bajo modulado y eco. La inclinación controla el corte del filtro y el panorama estéreo.
-- **Marco con grosor** (`ExtrudeGeometry` con bisel) para que se lea como objeto físico.
 
 ## Rendimiento y accesibilidad
 
-- Modelo comprimido con **Draco** (~16 KB); decodificador local en `public/draco/`.
+- Modelo comprimido con **Draco** (~300 KB); decodificador local en `public/draco/`.
 - Si los primeros 2 s van por debajo de 45 fps, baja la resolución interna.
 - Respeta `prefers-reduced-motion`: sin balanceo automático ni pulsos.
 - Controles accesibles por teclado (`P`, foco visible) y con `aria-pressed`.
@@ -58,5 +60,5 @@ public/models/        modelo exportado
 public/draco/         decodificador Draco
 src/main.js           escena, interacción y bucle
 src/audio.js          banda sonora ambiental procedural
-src/shaders.js        shaders de la superficie, la estela, el reflejo y el brillo
+src/shaders.js        shaders de las rayas, la estela, el reflejo y el brillo
 ```

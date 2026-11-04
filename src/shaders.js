@@ -27,16 +27,19 @@ const planeVertex = /* glsl */ `
 	}
 `;
 
+// Incluye los planos de corte de Three.js: la escena se recorta al marco de la portada
 const meshVertex = /* glsl */ `
+	#include <clipping_planes_pars_vertex>
 	varying vec3 vNormal;
 	varying vec3 vView;
 	varying vec2 vUv;
 	void main() {
 		vUv = uv;
-		vec4 mv = modelViewMatrix * vec4(position, 1.0);
-		vView = normalize(-mv.xyz);
+		vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+		vView = normalize(-mvPosition.xyz);
 		vNormal = normalize(normalMatrix * normal);
-		gl_Position = projectionMatrix * mv;
+		gl_Position = projectionMatrix * mvPosition;
+		#include <clipping_planes_vertex>
 	}
 `;
 
@@ -54,6 +57,7 @@ const lighting = /* glsl */ `
 export const stripesShader = {
 	vertexShader: meshVertex,
 	fragmentShader: /* glsl */ `
+		#include <clipping_planes_pars_fragment>
 		uniform vec2 uTilt;
 		varying vec3 vNormal;
 		varying vec3 vView;
@@ -61,6 +65,7 @@ export const stripesShader = {
 		${common}
 		${lighting}
 		void main() {
+			#include <clipping_planes_fragment>
 			vec2 p = vec2(vUv.x, 1.0 - vUv.y); // el exportador glTF invierte la V
 			// Lila que se oscurece hacia arriba a la derecha (la superficie se aleja)
 			float far = smoothstep(0.35, 1.15, p.x * 0.75 + (1.0 - p.y) * 0.7);
@@ -74,9 +79,7 @@ export const stripesShader = {
 
 			// Sombra de contacto de la bola
 			float shadow = 1.0 - smoothstep(BALL_R * 0.9, BALL_R * 1.25, length((p - BALL - vec2(0.012, 0.018)) * vec2(1.0, 1.15)));
-			color *= 1.0 - shadow * 0.55;
-			// Banda oscura superior, donde va el texto
-			color *= mix(0.12, 1.0, smoothstep(0.0, 0.09, p.y));
+			color *= 1.0 - shadow * 0.3;
 			gl_FragColor = vec4(color, 1.0);
 		}
 	`,
@@ -87,12 +90,14 @@ export const stripesShader = {
 export const trailShader = {
 	vertexShader: meshVertex,
 	fragmentShader: /* glsl */ `
+		#include <clipping_planes_pars_fragment>
 		uniform vec2 uTilt;
 		varying vec3 vNormal;
 		varying vec3 vView;
 		varying vec2 vUv;
 		${lighting}
 		void main() {
+			#include <clipping_planes_fragment>
 			float along = vUv.x;
 			vec3 red = vec3(0.95, 0.08, 0.18);
 			vec3 pink = vec3(1.0, 0.3, 0.55);

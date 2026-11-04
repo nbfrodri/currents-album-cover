@@ -33,9 +33,13 @@ STRIPE_HEIGHT = 0.0035  # grosor de cada raya (imagen)
 WAVE_AMP = 0.03  # amplitud lateral de las ondas (imagen)
 WAVE_LIFT = 0.022  # amplitud en altura de las ondas (imagen)
 SIDES = 6
-SINK = 0.45  # altura del centro de la bola en radios: < 1 la deja medio hundida
-MENISCUS = 0.045  # cuánto suben las rayas al tocar la bola (imagen)
-MENISCUS_WIDTH = 0.04  # alcance del menisco desde el borde de la bola (imagen)
+FLOW_R = BALL_R * 0.85  # radio del flujo: algo menor que la bola para que las rayas se peguen a ella
+DENT = 0.05  # profundidad del hoyo que hace la bola en la superficie (imagen)
+DENT_WIDTH = 0.11  # alcance del hoyo desde el centro de la bola (imagen)
+SINK = 0.45  # altura del centro de la bola sobre el fondo del hoyo, en radios
+# Se modela con un pequeño margen fuera de la portada: al girarla, el marco de la web recorta lo que sobra
+DOMAIN_X = (-0.06, 1.06)
+DOMAIN_Y = (-0.06, 1.06)
 
 
 def along_across(p):
@@ -66,21 +70,21 @@ def warp(p):
 	return q, lift
 
 
-def meniscus(p):
-	"""Las rayas trepan por la bola como un líquido: máximo en su borde, decae hacia fuera."""
-	d = max((p - BALL).length - BALL_R, 0.0)
-	return MENISCUS * math.exp(-((d / MENISCUS_WIDTH) ** 2))
+def dent(p):
+	"""Hoyo suave alrededor de la bola: la superficie cede bajo su peso (valor negativo)."""
+	r = (p - BALL).length
+	return -DENT * math.exp(-((r / DENT_WIDTH) ** 2))
 
 
 def across_for(a, c):
 	"""Resuelve psi(a, b) = c para b (mismo lado que c), por bisección."""
 	sign = 1 if c >= 0 else -1
 	c = abs(c)
-	lo = math.sqrt(max(BALL_R * BALL_R - a * a, 0.0)) + 1e-6
+	lo = math.sqrt(max(FLOW_R * FLOW_R - a * a, 0.0)) + 1e-6
 	hi = c + BALL_R + 1.0
 	for _ in range(40):
 		mid = (lo + hi) / 2
-		if mid * (1 - BALL_R * BALL_R / (a * a + mid * mid)) < c:
+		if mid * (1 - FLOW_R * FLOW_R / (a * a + mid * mid)) < c:
 			lo = mid
 		else:
 			hi = mid
@@ -89,13 +93,13 @@ def across_for(a, c):
 
 def along_samples():
 	"""Pocas muestras en el tramo recto, muchas cerca de la bola y en la estela."""
-	upstream = [-1.3 + (1.15 * i / 24) for i in range(24)]
-	downstream = [-0.15 + (1.05 * i / 260) for i in range(261)]
+	upstream = [-2.0 + (1.85 * i / 34) for i in range(34)]
+	downstream = [-0.15 + (1.45 * i / 320) for i in range(321)]
 	return upstream + downstream
 
 
 def inside(p):
-	return 0 <= p.x <= 1 and 0 <= p.y <= 1
+	return DOMAIN_X[0] <= p.x <= DOMAIN_X[1] and DOMAIN_Y[0] <= p.y <= DOMAIN_Y[1]
 
 
 def to_world(p, lift=0.0):
@@ -180,14 +184,14 @@ def build_stripes(mat):
 		while True:
 			c = side * (GAP + PERIOD * (k + 0.5))
 			k += 1
-			if abs(c) > 0.85:
+			if abs(c) > 0.9:
 				break
 			line = []
 			for a in samples:
 				b = across_for(a, c)
 				p = BALL + DIR * a + PERP * b
 				q, lift = warp(p)
-				line.append((q, lift + meniscus(p), 0.0))
+				line.append((q, lift + dent(p), 0.0))
 			for run in clip_runs(line):
 				add_tube(bm, uv_layer, run, lambda _: STRIPE_WIDTH / 2, STRIPE_HEIGHT / 2, lambda p, _: (p.x, p.y))
 				count += 1
@@ -206,15 +210,15 @@ def build_trail(mat):
 	"""Estela por el hueco central: recta hasta el borde de la bola, ondulada después."""
 	bm = bmesh.new()
 	uv_layer = bm.loops.layers.uv.new("UVMap")
-	reach = BALL.length
-	upstream = [-reach + (reach - BALL_R) * i / 40 for i in range(41)]
-	downstream = [BALL_R * 0.9 + 0.9 * i / 220 for i in range(221)]
+	start = BALL.length + 0.1  # empieza justo fuera de la portada, arriba a la izquierda
+	upstream = [-start + (start - FLOW_R) * i / 50 for i in range(51)]
+	downstream = [FLOW_R + 1.3 * i / 300 for i in range(301)]
 	for part in (upstream, downstream):
 		line = []
 		for a in part:
 			p = BALL + DIR * a
 			q, lift = warp(p)
-			line.append((q, lift + meniscus(p) + 0.001, a))
+			line.append((q, lift + dent(p) + 0.001, a))
 		for run in clip_runs(line):
 			add_tube(bm, uv_layer, run, trail_width, 0.0018, lambda _, a: (a, 0.0))
 	return finish_mesh("Trail", bm, mat)
@@ -246,14 +250,17 @@ def build():
 
 	radius = BALL_R * 2
 	center = to_world(BALL)
-	bpy.ops.mesh.primitive_uv_sphere_add(segments=64, ring_count=32, radius=radius, location=(center.x, center.y, radius * SINK))
+	bottom = dent(BALL) * 2  # fondo del hoyo (mundo)
+	bpy.ops.mesh.primitive_uv_sphere_add(
+		segments=64, ring_count=32, radius=radius, location=(center.x, center.y, bottom + radius * SINK)
+	)
 	ball = bpy.context.active_object
 	ball.name = "Ball"
 	ball.data.materials.append(material("Chrome", (0.95, 0.95, 0.97), 1.0, 0.02))
 	bpy.ops.object.shade_smooth()
 
 	# fondo negro solo para previsualizar en Blender (en Three.js lo pone la escena)
-	bpy.ops.mesh.primitive_plane_add(size=2, location=(0, 0, -0.002))
+	bpy.ops.mesh.primitive_plane_add(size=4, location=(0, 0, -DENT * 2 - 0.01))
 	bpy.context.active_object.name = "PreviewBase"
 	bpy.context.active_object.data.materials.append(material("Ink", (0.02, 0.01, 0.03), 0.0, 0.9))
 

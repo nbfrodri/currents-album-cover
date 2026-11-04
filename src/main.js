@@ -6,13 +6,15 @@ import { stripesShader, trailShader, glareShader, reflectionEnvShader } from "./
 
 const MAX_TILT = { x: 0.35, y: 0.5 }; // radianes
 const COVER = 2; // la portada mide 2x2 (igual que en Blender)
-const MAX_DEPTH = 4; // multiplicador de profundidad en el modo "despiece"
+const MAX_DEPTH = 2.2; // multiplicador del relieve en el modo Profundidad
+const FLOOR_DEPTH = 0.06; // la escena queda justo detrás del marco
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const canvas = document.querySelector("#scene");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.localClippingEnabled = true;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 50);
@@ -47,8 +49,11 @@ function roundedRect(size, radius) {
 	return shape;
 }
 
+// Marco hueco: un borde con grosor alrededor de la ventana por la que se ve la escena
+const frameShape = roundedRect(COVER + 0.12, 0.06);
+frameShape.holes.push(roundedRect(COVER, 0.001));
 const frame = new THREE.Mesh(
-	new THREE.ExtrudeGeometry(roundedRect(COVER + 0.12, 0.06), {
+	new THREE.ExtrudeGeometry(frameShape, {
 		depth: 0.12,
 		bevelEnabled: true,
 		bevelThickness: 0.015,
@@ -60,10 +65,28 @@ const frame = new THREE.Mesh(
 frame.position.z = -0.14; // cara frontal (con bisel) justo detrás de la superficie
 cover.add(frame);
 
+// La portada es una ventana: la escena 3D queda detrás y estos planos (en el espacio de la
+// portada) la recortan al marco. Se pasan a coordenadas de mundo en cada fotograma.
+const windowPlanes = [
+	new THREE.Plane(new THREE.Vector3(-1, 0, 0), COVER / 2),
+	new THREE.Plane(new THREE.Vector3(1, 0, 0), COVER / 2),
+	new THREE.Plane(new THREE.Vector3(0, -1, 0), COVER / 2),
+	new THREE.Plane(new THREE.Vector3(0, 1, 0), COVER / 2),
+];
+const clipPlanes = windowPlanes.map((plane) => plane.clone());
+
+// Escena de Blender, justo detrás del marco
+const floor = new THREE.Group();
+floor.position.z = -FLOOR_DEPTH;
+cover.add(floor);
+
 // Fondo negro entre las rayas (las rayas, la estela y la bola vienen de Blender)
-const base = new THREE.Mesh(new THREE.PlaneGeometry(COVER, COVER), new THREE.MeshBasicMaterial({ color: 0x080310 }));
-base.position.z = -0.001;
-cover.add(base);
+const base = new THREE.Mesh(
+	new THREE.PlaneGeometry(COVER * 3, COVER * 3),
+	new THREE.MeshBasicMaterial({ color: 0x080310, clippingPlanes: clipPlanes }),
+);
+base.position.z = -0.12; // por debajo del hoyo de la bola
+floor.add(base);
 
 // Texto naranja de la banda superior, en una capa propia para que flote con el parallax
 function titleTexture() {
@@ -71,6 +94,12 @@ function titleTexture() {
 	c.width = 2048;
 	c.height = 144;
 	const ctx = c.getContext("2d");
+	// franja oscura bajo el texto, como el borde superior del original
+	const shade = ctx.createLinearGradient(0, 0, 0, c.height);
+	shade.addColorStop(0, "rgba(6, 2, 10, 0.95)");
+	shade.addColorStop(1, "rgba(6, 2, 10, 0)");
+	ctx.fillStyle = shade;
+	ctx.fillRect(0, 0, c.width, c.height);
 	ctx.fillStyle = "#f2992e";
 	ctx.font = "800 58px 'Helvetica Neue', Arial, sans-serif";
 	ctx.textBaseline = "middle";
@@ -126,13 +155,14 @@ const ballMaterial = new THREE.MeshStandardMaterial({
 	roughness: 0,
 	envMap: reflection.texture,
 	envMapIntensity: 1.3,
+	clippingPlanes: clipPlanes,
 });
-const stripesMaterial = new THREE.ShaderMaterial({ ...stripesShader, uniforms: { uTilt: shared.uTilt } });
-const trailMaterial = new THREE.ShaderMaterial({ ...trailShader, uniforms: { uTilt: shared.uTilt } });
+const clipped = { clipping: true, clippingPlanes: clipPlanes };
+const stripesMaterial = new THREE.ShaderMaterial({ ...stripesShader, ...clipped, uniforms: { uTilt: shared.uTilt } });
+const trailMaterial = new THREE.ShaderMaterial({ ...trailShader, ...clipped, uniforms: { uTilt: shared.uTilt } });
 const materials = { Ball: ballMaterial, Stripes: stripesMaterial, Trail: trailMaterial };
 
-// Modo despiece: el texto y la bola se separan y el relieve de rayas y estela se exagera
-const depthNodes = [{ obj: title, baseZ: 0.12, origin: title.position.z, axis: "z" }];
+// Modo Profundidad: el relieve (ondas y hoyo de la bola) se exagera y el texto flota
 const reliefNodes = [];
 let ball = null;
 
@@ -143,15 +173,10 @@ loader.load("/models/currents.glb", (gltf) => {
 	model.traverse((obj) => {
 		if (!obj.isMesh) return;
 		obj.material = materials[obj.name];
-		// en el GLB el eje Y local es la profundidad (Z de Blender)
-		if (obj.name === "Ball") {
-			ball = obj;
-			depthNodes.push({ obj, baseZ: 0.25, origin: obj.position.y, axis: "y" });
-		} else {
-			reliefNodes.push(obj);
-		}
+		if (obj.name === "Ball") ball = obj;
+		else reliefNodes.push(obj); // su eje Y local es la altura (Z de Blender)
 	});
-	cover.add(model);
+	floor.add(model);
 });
 
 let depth = 1;
@@ -269,8 +294,8 @@ renderer.setAnimationLoop(() => {
 	tilt.lerp(goal, idle ? 0.02 : 0.08);
 
 	depth = THREE.MathUtils.lerp(depth, depthGoal, 0.06);
-	for (const { obj, baseZ, origin, axis } of depthNodes) obj.position[axis] = origin + baseZ * (depth - 1);
 	for (const obj of reliefNodes) obj.scale.y = depth;
+	title.position.z = 0.04 + 0.12 * (depth - 1);
 
 	cover.rotation.y = tilt.x * MAX_TILT.y;
 	cover.rotation.x = tilt.y * MAX_TILT.x;
@@ -280,6 +305,9 @@ renderer.setAnimationLoop(() => {
 	ambient.setTilt(cover.rotation.y, cover.rotation.x);
 	glareUniforms.uPointer.value.set(0.5 + tilt.x * 0.5, 0.5 - tilt.y * 0.5);
 	glareUniforms.uStrength.value = THREE.MathUtils.lerp(glareUniforms.uStrength.value, idle ? 0.08 : 0.2, 0.05);
+
+	cover.updateMatrixWorld();
+	windowPlanes.forEach((plane, i) => clipPlanes[i].copy(plane).applyMatrix4(cover.matrixWorld));
 
 	if (ball) {
 		// captura lo que rodea a la bola (sin la bola ni el brillo) para su reflejo
