@@ -17,7 +17,6 @@ Para probarlo en el móvil (misma red Wi‑Fi): `npx vite --host` y abrir la IP 
 | Acción | Efecto |
 |---|---|
 | Mover el ratón / inclinar el móvil | Gira la portada |
-| Botón **Profundidad** o tecla `P` | Separa las capas para ver el volumen |
 | Botón **Sonido** o tecla `S` | Activa/desactiva la banda sonora ambiental |
 | Sin interacción 2,5 s | Balanceo automático |
 
@@ -30,7 +29,6 @@ Para probarlo en el móvil (misma red Wi‑Fi): `npx vite --host` y abrir la IP 
 - **Color en Three.js** (`src/shaders.js`): las rayas toman el lila del original y se oscurecen hacia arriba a la derecha; la estela pasa de rojo a rosa, naranja y amarillo según su distancia a la bola (guardada en la UV).
 - **Bola de cromo**: espejo perfecto cuyo reflejo es una `CubeCamera` que captura la propia portada cada fotograma, más un entorno de estudio solo visible para el reflejo.
 - **Marco como ventana**: el marco es hueco, con grosor y bisel (`ExtrudeGeometry`), y la escena queda detrás, recortada con planos de corte; al girar la portada se ve el volumen real.
-- **Modo Profundidad**: exagera el relieve (ondas y hoyo) y hace flotar el texto.
 - **Efecto holo de carta**: arcoíris sutil sobre las rayas y brillo especular que sigue al puntero, según la inclinación.
 - **Banda sonora procedural** (`src/audio.js`, Web Audio API, sin archivos de audio): pad de osciladores desafinados, filtro paso bajo modulado y eco. La inclinación controla el corte del filtro y el panorama estéreo.
 
@@ -39,7 +37,7 @@ Para probarlo en el móvil (misma red Wi‑Fi): `npx vite --host` y abrir la IP 
 - Modelo comprimido con **Draco** (~300 KB); decodificador local en `public/draco/`.
 - Si los primeros 2 s van por debajo de 45 fps, baja la resolución interna.
 - Respeta `prefers-reduced-motion`: sin balanceo automático ni pulsos.
-- Controles accesibles por teclado (`P`, foco visible) y con `aria-pressed`.
+- Controles accesibles por teclado (`S`, foco visible) y con `aria-pressed`.
 
 ## Regenerar el modelo
 

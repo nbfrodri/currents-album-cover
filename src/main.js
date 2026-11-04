@@ -6,7 +6,6 @@ import { stripesShader, trailShader, glareShader, reflectionEnvShader } from "./
 
 const MAX_TILT = { x: 0.35, y: 0.5 }; // radianes
 const COVER = 2; // la portada mide 2x2 (igual que en Blender)
-const MAX_DEPTH = 2.2; // multiplicador del relieve en el modo Profundidad
 const FLOOR_DEPTH = 0.06; // la escena queda justo detrás del marco
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -162,8 +161,6 @@ const stripesMaterial = new THREE.ShaderMaterial({ ...stripesShader, ...clipped,
 const trailMaterial = new THREE.ShaderMaterial({ ...trailShader, ...clipped, uniforms: { uTilt: shared.uTilt } });
 const materials = { Ball: ballMaterial, Stripes: stripesMaterial, Trail: trailMaterial };
 
-// Modo Profundidad: el relieve (ondas y hoyo de la bola) se exagera y el texto flota
-const reliefNodes = [];
 let ball = null;
 
 const loader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath("/draco/"));
@@ -174,19 +171,9 @@ loader.load("/models/currents.glb", (gltf) => {
 		if (!obj.isMesh) return;
 		obj.material = materials[obj.name];
 		if (obj.name === "Ball") ball = obj;
-		else reliefNodes.push(obj); // su eje Y local es la altura (Z de Blender)
 	});
 	floor.add(model);
 });
-
-let depth = 1;
-let depthGoal = 1;
-const depthButton = document.querySelector("#depth");
-function toggleDepth() {
-	depthGoal = depthGoal === 1 ? MAX_DEPTH : 1;
-	depthButton.setAttribute("aria-pressed", String(depthGoal !== 1));
-}
-depthButton.addEventListener("click", toggleDepth);
 
 const ambient = createAmbient();
 const soundButton = document.querySelector("#sound");
@@ -196,10 +183,7 @@ async function toggleSound() {
 soundButton.addEventListener("click", toggleSound);
 
 window.addEventListener("keydown", (e) => {
-	if (e.repeat) return;
-	const k = e.key.toLowerCase();
-	if (k === "p") toggleDepth();
-	if (k === "s") toggleSound();
+	if (!e.repeat && e.key.toLowerCase() === "s") toggleSound();
 });
 
 // Interacción: ratón, táctil y giroscopio
@@ -293,9 +277,6 @@ renderer.setAnimationLoop(() => {
 	const goal = idle ? idleGoal.set(Math.sin(t * 0.5) * 0.35, Math.sin(t * 0.37) * 0.25) : target;
 	tilt.lerp(goal, idle ? 0.02 : 0.08);
 
-	depth = THREE.MathUtils.lerp(depth, depthGoal, 0.06);
-	for (const obj of reliefNodes) obj.scale.y = depth;
-	title.position.z = 0.04 + 0.12 * (depth - 1);
 
 	cover.rotation.y = tilt.x * MAX_TILT.y;
 	cover.rotation.x = tilt.y * MAX_TILT.x;
