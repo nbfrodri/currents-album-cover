@@ -28,18 +28,25 @@ export const trailUniforms = {
 	uRange: { value: new THREE.Vector2(0, 1) }, // avance (uv.x) del principio y el final de la línea
 };
 
-// Gradiente de la línea del medio: los colores de la estela del original en ciclo, que fluyen de
-// principio a fin. TRAIL_FLOW = vueltas del gradiente por segundo.
-const TRAIL_FLOW = 0.12;
+// Gradiente de la línea del medio: los colores de la línea de la portada original, medidos sobre
+// ella (hilo rojo, rosa en la mancha junto a la bola, coral al salir, naranja y ámbar en la cola),
+// de ida y vuelta para que no haya saltos, fluyendo despacio de principio a fin.
+// TRAIL_FLOW = vueltas del gradiente por segundo (una cada ~40 s).
+const TRAIL_FLOW = 0.025;
+const TRAIL_STOPS = ["#ea2530", "#f2629b", "#ec344c", "#ee4d30", "#f2a531", "#ee4d30", "#ec344c", "#f2629b"];
+const glslColor = (hex) => {
+	const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+	return `pow(vec3(${r.toFixed(3)}, ${g.toFixed(3)}, ${b.toFixed(3)}), vec3(2.2))`; // sRGB → lineal
+};
 const TRAIL_GRADIENT = `
+	vec3 trailStop(int i) {
+		${TRAIL_STOPS.map((hex, i) => `if (i == ${i}) return ${glslColor(hex)};`).join("\n\t\t")}
+		return ${glslColor(TRAIL_STOPS[0])};
+	}
 	vec3 trailGradient(float s) {
-		vec3 red = vec3(0.95, 0.08, 0.18), pink = vec3(1.0, 0.3, 0.55);
-		vec3 orange = vec3(1.0, 0.55, 0.1), yellow = vec3(1.0, 0.82, 0.25);
-		s = fract(s) * 4.0;
-		if (s < 1.0) return mix(red, pink, smoothstep(0.0, 1.0, s));
-		if (s < 2.0) return mix(pink, orange, smoothstep(1.0, 2.0, s));
-		if (s < 3.0) return mix(orange, yellow, smoothstep(2.0, 3.0, s));
-		return mix(yellow, red, smoothstep(3.0, 4.0, s));
+		float x = fract(s) * ${TRAIL_STOPS.length}.0;
+		int i = int(floor(x));
+		return mix(trailStop(i), trailStop(i + 1 == ${TRAIL_STOPS.length} ? 0 : i + 1), smoothstep(0.0, 1.0, fract(x)));
 	}
 `;
 
@@ -98,7 +105,7 @@ export function trailWaves(material) {
 				.replace("#include <common>", `#include <common>\nuniform float uTime;\nuniform vec2 uRange;\nvarying float vAlong;\n${TRAIL_GRADIENT}`)
 				.replace("#include <color_fragment>", `#include <color_fragment>
 	float along = (vAlong - uRange.x) / max(uRange.y - uRange.x, 1e-4);
-	diffuseColor.rgb = trailGradient(along * 1.5 - uTime * ${TRAIL_FLOW});`)
+	diffuseColor.rgb = trailGradient(along - uTime * ${TRAIL_FLOW});`)
 				.replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
 	totalEmissiveRadiance += diffuseColor.rgb * 0.25; // que brille un poco, como la estela del original`);
 		},
