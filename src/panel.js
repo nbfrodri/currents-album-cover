@@ -46,8 +46,8 @@ function wireVolume(volumeInput, muteButton, player) {
 }
 
 // Panel del reproductor: tema actual, controles, barra de progreso y tracklist clicable. Se abre
-// solo al empezar un tema; se puede minimizar a una barra o cerrar (y no vuelve a abrirse solo
-// hasta el siguiente tema). onState recibe cada cambio del reproductor (para que la portada
+// solo al empezar un tema; se puede minimizar a una barra o recogerlo al mínimo con la X (solo
+// el nombre del álbum y el botón de maximizar). Oculto con T o CURRENTS, no vuelve a abrirse solo hasta el siguiente tema. onState recibe cada cambio del reproductor (para que la portada
 // reaccione). Devuelve setOpen y el lienzo del visualizador para el bucle de render.
 export function mountPanel(doc, player, tracks, onState) {
 	const $ = (selector) => doc.querySelector(selector);
@@ -65,15 +65,20 @@ export function mountPanel(doc, player, tracks, onState) {
 	const minButton = $("#player-min");
 
 	const setOpen = (open) => (panel.hidden = !open);
-	let minimized = false;
-	function setMinimized(value) {
-		minimized = value;
-		panel.classList.toggle("minimized", value);
-		minButton.setAttribute("aria-expanded", String(!value));
-		minButton.setAttribute("aria-label", value ? "Desplegar el reproductor" : "Minimizar el reproductor");
+	// "full", "minimized" (una barra con el tema y el progreso) o "collapsed" (solo el nombre del
+	// álbum y el botón de maximizar)
+	let view = "full";
+	function setView(value) {
+		view = value;
+		panel.classList.toggle("minimized", view === "minimized");
+		panel.classList.toggle("collapsed", view === "collapsed");
+		minButton.setAttribute("aria-expanded", String(view === "full"));
+		minButton.setAttribute("aria-label", view === "full" ? "Minimizar el reproductor" : "Desplegar el reproductor");
 	}
-	minButton.addEventListener("click", () => setMinimized(!minimized));
-	$("#player-close").addEventListener("click", () => setOpen(false));
+	const collapse = () => setView("collapsed");
+	minButton.addEventListener("click", () => setView(view === "full" ? "minimized" : "full"));
+	// la X no quita el reproductor: lo recoge al mínimo para que la música siga a mano
+	$("#player-close").addEventListener("click", collapse);
 	$("#album-total").textContent = `${tracks.length} temas · ${formatTime(tracks.reduce((sum, t) => sum + seconds(t.time), 0))}`;
 
 
@@ -88,7 +93,7 @@ export function mountPanel(doc, player, tracks, onState) {
 		}
 		panel.classList.toggle("playing", state.playing);
 		playButton.setAttribute("aria-label", state.playing ? "Pausar" : "Reproducir");
-		nowLabel.textContent = `${state.playing ? "Sonando" : "En pausa"} · ${String(state.index + 1).padStart(2, "0")}`;
+		nowLabel.textContent = `${state.playing ? "Reproduciendo" : "En pausa"} · ${String(state.index + 1).padStart(2, "0")}`;
 		nowTitle.textContent = tracks[state.index].title;
 		trackButtons.forEach((button, i) => button.setAttribute("aria-current", String(i === state.index)));
 		const duration = Number.isFinite(state.duration) ? state.duration : 0;
@@ -117,11 +122,11 @@ export function mountPanel(doc, player, tracks, onState) {
 	// abre el reproductor minimizado si estaba cerrado (al tocar la bola): no tapa la portada
 	function reveal() {
 		if (!panel.hidden) return;
-		setMinimized(true);
+		setView("minimized");
 		setOpen(true);
 	}
 
 	wireVolume(volumeInput, muteButton, player);
 
-	return { setOpen, reveal, context: canvas.getContext("2d"), width: canvas.width, height: canvas.height };
+	return { setOpen, reveal, collapse, context: canvas.getContext("2d"), width: canvas.width, height: canvas.height };
 }

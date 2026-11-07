@@ -15,8 +15,11 @@ function setup(orientation) {
 	const listeners = new Map();
 	const stats = { resets: 0, player: [] };
 	const elements = new Map();
-	const element = () => ({
-		classList: { toggle() {} },
+	const element = () => {
+		const classes = new Set();
+		return {
+		classes,
+		classList: { toggle(name, on = !classes.has(name)) { classes[on ? "add" : "delete"](name); } },
 		style: { setProperty() {} },
 		append() {},
 		setAttribute(name, value) { this[name] = value; },
@@ -25,7 +28,8 @@ function setup(orientation) {
 			createLinearGradient: () => ({ addColorStop() {} }), fillRect() {}, fillText() {},
 			clearRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {},
 		}),
-	});
+		};
+	};
 	const preference = { matches: true, addEventListener(name, callback) { this[name] = callback; } };
 	const window = {
 		innerWidth: 1200, innerHeight: 800, devicePixelRatio: 1,
@@ -43,6 +47,7 @@ function setup(orientation) {
 	};
 	class Renderer {
 		setPixelRatio() {}
+		getPixelRatio() { return 1; }
 		setSize() {}
 		setAnimationLoop(callback) { this.frame = callback; }
 		render() {}
@@ -87,6 +92,30 @@ function setup(orientation) {
 	return { run: (code) => vm.runInContext(code, context), listeners, window, preference, elements, stats };
 }
 
+test("el zoom hacia fuera se queda cerca del encuadre inicial", () => {
+	const app = setup();
+	assert.ok(app.run("controls.maxDistance <= camera.position.length() * 1.3 + 1e-9"));
+});
+
+test("la pantalla de carga se va cuando llega el modelo y la portada entra girando", () => {
+	const app = setup();
+	const screen = app.elements.get("#loader");
+	app.run("renderer.frame()");
+	assert.ok(!screen.classes.has("done")); // sin modelo sigue la carga
+	app.run("model = new THREE.Group(); const now = performance.now(); performance = { now: () => now + 2000 }; renderer.frame()");
+	assert.ok(screen.classes.has("done"));
+});
+
+test("al pasar por la bola el cursor es la mano de clicar", () => {
+	const app = setup();
+	app.run("pickAt = () => ({ name: 'ball' })");
+	app.elements.get("#scene").pointermove({ clientX: 1, clientY: 1 });
+	assert.equal(app.elements.get("#scene").style.cursor, "pointer");
+	app.run("pickAt = () => ({ name: null })");
+	app.elements.get("#scene").pointermove({ clientX: 1, clientY: 1 });
+	assert.equal(app.elements.get("#scene").style.cursor, "auto");
+});
+
 test("la cámara conserva la portada dentro del plano lejano en ventanas estrechas", () => {
 	const app = setup();
 	app.window.innerWidth = 80;
@@ -107,17 +136,25 @@ test("los atajos no interceptan combinaciones del navegador ni campos de texto",
 	assert.equal(app.stats.resets, 1);
 });
 
-test("la tecla T abre y cierra el reproductor; Escape y el botón de cerrar lo cierran", () => {
+test("la tecla T abre y cierra el reproductor; la X y Escape lo recogen al mínimo sin quitarlo", () => {
 	const app = setup();
 	const panel = app.elements.get("#tracklist");
+	const min = app.elements.get("#player-min");
 	panel.hidden = true;
 	const key = app.listeners.get("keydown");
 	key({ key: "t" });
 	assert.equal(panel.hidden, false);
-	key({ key: "Escape" });
-	assert.equal(panel.hidden, true);
-	key({ key: "t" });
 	app.elements.get("#player-close").click();
+	assert.equal(panel.hidden, false);
+	assert.ok(panel.classes.has("collapsed")); // solo quedan el nombre del álbum y maximizar…
+	assert.equal(min["aria-label"], "Desplegar el reproductor");
+	min.click(); // …que lo despliega entero
+	assert.ok(!panel.classes.has("collapsed") && !panel.classes.has("minimized"));
+	assert.equal(min["aria-expanded"], "true");
+	key({ key: "Escape" });
+	assert.equal(panel.hidden, false);
+	assert.ok(panel.classes.has("collapsed"));
+	key({ key: "t" });
 	assert.equal(panel.hidden, true);
 	key({ key: "t", metaKey: true });
 	assert.equal(panel.hidden, true);
@@ -125,13 +162,14 @@ test("la tecla T abre y cierra el reproductor; Escape y el botón de cerrar lo c
 	assert.equal(app.elements.has("#reset"), false);
 });
 
-test("al empezar un tema se abre el reproductor; cerrado sigue así hasta el siguiente tema", async () => {
+test("al empezar un tema se abre el reproductor; oculto sigue así hasta el siguiente tema", async () => {
 	const app = setup();
 	const panel = app.elements.get("#tracklist");
 	panel.hidden = true;
 	await app.run("player.toggle()");
 	assert.equal(panel.hidden, false);
-	app.elements.get("#player-close").click();
+	assert.match(app.elements.get("#now-label").textContent, /^Reproduciendo/);
+	app.listeners.get("keydown")({ key: "t" });
 	await app.run("player.toggle(); player.toggle()"); // pausa y sigue el mismo tema
 	assert.equal(panel.hidden, true);
 	await app.run("player.next()");

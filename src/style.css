@@ -16,6 +16,7 @@
 
 :root {
 	--ink: #07030b;
+	--slate: #4a5868; /* fondo azul grisáceo (el mismo que el del lienzo) */
 	--panel: rgb(12 5 18 / 0.86);
 	--line: rgb(201 174 242 / 0.18);
 	--lilac: #c9aef2;
@@ -33,7 +34,7 @@
 html,
 body {
 	height: 100%;
-	background: radial-gradient(circle at 50% 40%, #150820 0%, var(--ink) 70%);
+	background: radial-gradient(circle at 50% 40%, #56657a 0%, var(--slate) 70%);
 	color: var(--text);
 	font-family: "Archivo Expanded", system-ui, sans-serif;
 	font-weight: 500;
@@ -45,10 +46,6 @@ body {
 	width: 100%;
 	height: 100%;
 	touch-action: none;
-}
-
-#scene.hovering {
-	cursor: pointer;
 }
 
 .visually-hidden {
@@ -171,6 +168,31 @@ input:focus-visible {
 }
 
 .player.minimized .head-button .icon-max {
+	display: block;
+}
+
+/* Recogido con la X: solo el nombre del álbum y el botón de maximizar */
+.player.collapsed {
+	width: auto;
+}
+
+.player.collapsed .stripes,
+.player.collapsed .player-body > :not(.player-head),
+.player.collapsed #viz,
+.player.collapsed #album-total,
+.player.collapsed #player-close {
+	display: none;
+}
+
+.player.collapsed .player-body {
+	padding: 12px 18px;
+}
+
+.player.collapsed .head-button .icon-min {
+	display: none;
+}
+
+.player.collapsed .head-button .icon-max {
 	display: block;
 }
 
@@ -435,20 +457,6 @@ input:focus-visible {
 	display: none;
 }
 
-/* Pie */
-.caption {
-	position: fixed;
-	bottom: 24px;
-	left: 16px;
-	right: 16px;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	gap: 6px;
-	text-align: center;
-	pointer-events: none;
-}
-
 /* Botón de ayuda: pastilla abajo a la derecha, con el ? en un círculo dorado */
 .help-button {
 	position: fixed;
@@ -554,15 +562,6 @@ input:focus-visible {
 	border: 1px solid var(--line);
 }
 
-.caption [role="status"] {
-	font-size: 0.65rem;
-	letter-spacing: 0.08em;
-}
-
-.caption [role="status"]:empty {
-	display: none;
-}
-
 /* Móvil: el reproductor es una hoja inferior y la marca se esconde para dejar sitio */
 @media (max-width: 600px) {
 	.hud {
@@ -587,5 +586,143 @@ input:focus-visible {
 
 	.tracks button {
 		font-size: 0.72rem;
+	}
+
+	.player.collapsed {
+		right: 12px;
+		bottom: 84px;
+		width: auto;
+		border-width: 1px;
+	}
+}
+
+/* Pantalla de carga: rayas lila, la estela que se dibuja hacia la bola y la bola que late */
+.loader {
+	position: fixed;
+	inset: 0;
+	z-index: 10;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 18px;
+	padding: 16px;
+	background: radial-gradient(circle at 50% 40%, #56657a 0%, var(--slate) 70%);
+	transition: opacity 0.9s ease, visibility 0.9s;
+}
+
+.loader.done {
+	opacity: 0;
+	visibility: hidden;
+}
+
+.loader-art {
+	position: relative;
+	width: 160px;
+	height: 160px;
+	overflow: hidden;
+	background: var(--ink);
+	box-shadow: 0 18px 40px rgb(0 0 0 / 0.35);
+}
+
+.loader-stripes {
+	position: absolute;
+	inset: -40px;
+	background: repeating-linear-gradient(42deg, var(--lilac) 0 1.5px, transparent 1.5px 5px);
+	opacity: 0.55;
+	animation: loader-drift 3s linear infinite;
+}
+
+.loader-trail {
+	position: absolute;
+	left: 8px;
+	top: 8px;
+	width: 120px;
+	height: 3px;
+	background: linear-gradient(90deg, #e8233a, #ff4d8c 70%, #ff8c1a);
+	transform-origin: 0 50%;
+	rotate: 45deg;
+	animation: loader-trail 1.6s cubic-bezier(0.6, 0, 0.3, 1) infinite;
+}
+
+.loader-ball {
+	position: absolute;
+	left: 78px;
+	top: 78px;
+	width: 34px;
+	height: 34px;
+	border-radius: 50%;
+	background: radial-gradient(circle at 35% 30%, #fff 0%, #c9c9d2 18%, #6d6a78 55%, #1b1922 100%);
+	animation: loader-ball 1.6s ease-in-out infinite;
+}
+
+.loader-title {
+	font-size: 0.8rem;
+	font-weight: 700;
+	letter-spacing: 0.22em;
+	text-transform: uppercase;
+	color: var(--gold);
+}
+
+.loader-label {
+	font-size: 0.65rem;
+	letter-spacing: 0.08em;
+	color: var(--text);
+	text-align: center;
+}
+
+.loader-bar {
+	width: 160px;
+	height: 2px;
+	background: rgb(230 220 245 / 0.2);
+}
+
+.loader-bar span {
+	display: block;
+	height: 100%;
+	background: var(--trail);
+	transform-origin: 0 50%;
+	scale: var(--loaded, 0) 1;
+	transition: scale 0.3s;
+}
+
+.loader.failed .loader-bar,
+.loader.failed .loader-art * {
+	animation: none;
+	visibility: hidden;
+}
+
+@keyframes loader-drift {
+	to {
+		translate: 7.47px 0; /* un periodo de las rayas: el bucle no salta */
+	}
+}
+
+@keyframes loader-trail {
+	0% {
+		scale: 0 1;
+	}
+	55%,
+	100% {
+		scale: 1 1;
+	}
+}
+
+@keyframes loader-ball {
+	0%,
+	50% {
+		scale: 1;
+	}
+	65% {
+		scale: 1.18;
+	}
+	100% {
+		scale: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.loader-art * {
+		animation: none !important;
 	}
 }

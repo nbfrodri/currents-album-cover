@@ -1,8 +1,8 @@
 import * as THREE from "three";
 
-// Fondo de la página: rayas lila diagonales como las de la portada, con luz de cresta, que ondulan
-// con ondas largas y lentas; una franja de meandros redondos deriva despacio, el color oscila
-// entre violeta, lila y magenta, y hay un halo detrás de la portada. La música lo mueve con
+// Fondo de la página: azul grisáceo, con rayas diagonales en relieve
+// que ondulan con ondas largas y lentas; una franja de meandros redondos deriva despacio y hay
+// un halo detrás de la portada. La música lo mueve con
 // suavidad: graves que amplían las ondas, medios que iluminan y una onda suave en cada golpe.
 // Todo va despacio y con poco contraste para que no maree.
 const VERTEX = `
@@ -34,24 +34,26 @@ const FRAGMENT = `
 		// onda suave del último golpe, que sale del centro
 		float ring = exp(-pow((length(p) - uBeatAge * 0.6) * 6.0, 2.0)) * exp(-uBeatAge * 1.8);
 		shift += ring * 0.012;
-		// rayas con volumen: luz en la cresta, lados más oscuros y huecos negros. No se deslizan (solo
-		// ondulan) y no son demasiado finas: así no parpadean en muaré al moverse
+		// rayas con volumen sobre azul grisáceo: surcos más oscuros, cresta clara.
+		// No se deslizan (solo ondulan) y no son demasiado finas: así no parpadean en muaré
 		float profile = 0.5 + 0.5 * sin((c + shift) * 120.0);
 		float body = smoothstep(0.45, 0.8, profile);
 		float crest = pow(profile, 10.0);
-		// luz como en el original (clara abajo a la izquierda, casi negra arriba a la derecha) y halo
-		// detrás de la portada que late con la música
+		// luz como en el original (más clara abajo a la izquierda), viñeta suave y halo detrás de la
+		// portada que late con la música
 		vec2 q = (vUv - 0.5) * vec2(uAspect, 1.0);
 		float shade = 1.0 - smoothstep(-0.6, 0.7, q.x * 0.8 + q.y * 0.9);
 		float vignette = smoothstep(1.1, 0.25, length(q * vec2(0.9, 1.2)));
 		float halo = exp(-dot(q, q) * 5.0);
-		float light = (0.08 + 0.1 * uMid + 0.06 * uGlow + 0.1 * ring + 0.04 * band) * (0.35 + 0.65 * shade) * vignette;
-		// color de las rayas: entre violeta, lila y un toque magenta, que cambia despacio
-		float hue = 0.5 + 0.5 * sin(a * 1.3 + c * 0.7 + t * 0.05);
-		vec3 deep = mix(vec3(0.36, 0.22, 0.55), vec3(0.55, 0.2, 0.5), hue * 0.6);
-		vec3 lilac = vec3(0.86, 0.76, 0.98);
-		vec3 ink = vec3(0.027, 0.012, 0.043) + vec3(0.05, 0.03, 0.08) * halo * (0.6 + 0.8 * uGlow);
-		gl_FragColor = vec4(mix(ink, mix(deep, lilac, crest), body * light * 1.8), 1.0);
+		// colores en lineal: #4a5868 (azul grisáceo), su versión en sombra y #7d8ea2 en la cresta
+		vec3 slate = vec3(0.068, 0.0975, 0.139);
+		vec3 shadow = slate * 0.55;
+		vec3 light = vec3(0.205, 0.27, 0.361);
+		float groove = (1.0 - body) * (0.22 + 0.06 * band) * (0.7 + 0.3 * (1.0 - shade));
+		vec3 color = mix(slate, shadow, groove * 1.6);
+		color = mix(color, light, crest * (0.12 + 0.2 * uMid + 0.15 * uGlow + 0.3 * ring) * (0.5 + 0.5 * shade));
+		color *= mix(0.82, 1.0, vignette) * (1.0 + 0.06 * halo * uGlow);
+		gl_FragColor = vec4(color, 1.0);
 		#include <colorspace_fragment>
 	}
 `;

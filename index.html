@@ -24,7 +24,7 @@
 						<svg class="icon-min" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8 H13" /></svg>
 						<svg class="icon-max" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3 H13 V13 H3 Z" /></svg>
 					</button>
-					<button id="player-close" class="head-button" type="button" aria-label="Cerrar el reproductor" aria-keyshortcuts="Escape">
+					<button id="player-close" class="head-button" type="button" aria-label="Recoger el reproductor" aria-keyshortcuts="Escape">
 						<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4 L12 12 M12 4 L4 12" /></svg>
 					</button>
 				</header>
@@ -83,9 +83,16 @@
 			<span class="help-mark" aria-hidden="true">?</span> Controles
 		</button>
 
-		<footer class="caption">
-			<span id="model-status" role="status">Cargando portada…</span>
-		</footer>
+		<div id="loader" class="loader" role="status" aria-live="polite">
+			<div class="loader-art" aria-hidden="true">
+				<span class="loader-stripes"></span>
+				<span class="loader-trail"></span>
+				<span class="loader-ball"></span>
+			</div>
+			<p class="loader-title">Tame Impala · Currents</p>
+			<p id="loader-label" class="loader-label">Cargando portada</p>
+			<div class="loader-bar" aria-hidden="true"><span id="loader-fill"></span></div>
+		</div>
 		<script type="module" src="/src/main.js"></script>
 	</body>
 </html>

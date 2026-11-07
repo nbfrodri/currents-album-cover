@@ -140,8 +140,16 @@ function placeBackMarker(index) {
 }
 let model = null;
 
+// Pantalla de carga: animación de la bola y la estela mientras llega el modelo; se va cuando
+// el modelo está listo y ha pasado un mínimo, y entonces la portada entra girando
+const LOADER_MIN = 1.4; // segundos: que la animación de carga se llegue a ver
+const INTRO = 2.2; // segundos que dura la entrada de la portada
+const loadingScreen = document.querySelector("#loader");
+const loadingLabel = document.querySelector("#loader-label");
+const loadingFill = document.querySelector("#loader-fill");
+let introAt = null; // momento en que empieza la entrada (null: aún cargando)
+
 const loader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath("draco/"));
-const modelStatus = document.querySelector("#model-status");
 loader.load("models/currents.glb", (gltf) => {
 	model = gltf.scene;
 	model.rotation.x = Math.PI / 2; // Blender exporta en Y-up; la portada mira a +Z
@@ -181,9 +189,12 @@ loader.load("models/currents.glb", (gltf) => {
 	backMarker.material.clippingPlanes = clipPlanes;
 	model.add(backMarker);
 	floor.add(model);
-	modelStatus.textContent = "";
-}, undefined, () => {
-	modelStatus.textContent = "No se pudo cargar la portada. Recarga la página para reintentar.";
+	loadingFill.style.setProperty("--loaded", "1");
+}, (e) => {
+	if (e.lengthComputable) loadingFill.style.setProperty("--loaded", String(e.loaded / e.total));
+}, () => {
+	loadingScreen.classList.toggle("failed", true);
+	loadingLabel.textContent = "No se pudo cargar la portada. Recarga la página para reintentar.";
 });
 
 // Reproductor y tracklist
@@ -207,7 +218,7 @@ window.addEventListener("keydown", (e) => {
 	if (k === "b") player.prev();
 	if (k === "m") player.toggleMute();
 	if (e.key === "?") document.querySelector("#help").togglePopover?.();
-	if (k === "escape" && !tracklist.hidden) setTracklist(false);
+	if (k === "escape" && !tracklist.hidden) panel.collapse();
 });
 
 // Piezas clicables de la portada: la bola reproduce o pausa, CURRENTS abre el tracklist y
@@ -263,7 +274,8 @@ canvas.addEventListener("click", (e) => {
 canvas.addEventListener("pointermove", (e) => {
 	if (dragging) return;
 	const hit = pickAt(e.clientX, e.clientY);
-	canvas.classList.toggle("hovering", Boolean(hit?.name));
+	// en línea: OrbitControls deja cursor: auto en el estilo del lienzo y taparía una clase
+	canvas.style.cursor = hit?.name ? "pointer" : "auto";
 });
 
 // Inclinación de la portada (efecto carta): solo con el giroscopio del móvil. Con ratón, la
@@ -329,7 +341,7 @@ function resize() {
 	// distancia que encaja la portada (con margen) tanto en horizontal como en vertical
 	const fit = (COVER * 1.45) / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / Math.min(camera.aspect, 1);
 	controls.minDistance = fit * 0.35;
-	controls.maxDistance = fit * 2.5;
+	controls.maxDistance = fit * 1.3; // poco más lejos que el encuadre inicial: la portada no se pierde
 	camera.far = Math.max(50, controls.maxDistance + COVER * 2);
 	camera.updateProjectionMatrix();
 	if (!framed) {
@@ -367,7 +379,15 @@ renderer.setAnimationLoop(() => {
 	controls.update();
 	tilt.lerp(target, 0.08);
 
-	cover.rotation.y = tilt.x * MAX_TILT.y;
+	// entrada: cuando el modelo está listo, la portada llega girando desde la contraportada
+	if (introAt === null && model && t > LOADER_MIN) {
+		introAt = t;
+		loadingScreen.classList.toggle("done", true);
+	}
+	const intro = introAt === null || reducedMotion ? 1 : Math.min((t - introAt) / INTRO, 1);
+	const ease = 1 - (1 - intro) ** 3;
+	cover.scale.setScalar(0.6 + 0.4 * ease);
+	cover.rotation.y = tilt.x * MAX_TILT.y - (1 - ease) * Math.PI * 0.9;
 	cover.rotation.x = tilt.y * MAX_TILT.x;
 
 	glareUniforms.uPointer.value.set(0.5 + tilt.x * 0.5, 0.5 - tilt.y * 0.5);
