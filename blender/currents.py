@@ -2,13 +2,18 @@
 
 Referencia: la portada original de Robert Beatty. Toda la portada se hace aquí (forma, color,
 materiales y texto); la web solo la carga y añade la interacción.
-- Stripes: ~100 rayas lila (tubos planos) que siguen las líneas de corriente de un flujo potencial
-  alrededor de la bola, psi = d_perp * (1 - R^2 / r^2): rectas hasta la bola y onduladas detrás,
-  en el plano y en altura. El color (lila que se oscurece arriba a la derecha) va en sus vértices.
+- Stripes: ~100 rayas lila (tubos planos), curvas de nivel de un campo de corriente (blender/flow.py):
+  flujo potencial alrededor de la bola más unos meandros en la franja inferior. Rectas hasta la
+  bola y, por debajo, meandros psicodélicos que se pliegan en eses y gotas y suben en altura. El color (lila que se
+  oscurece arriba a la derecha) va en sus vértices.
 - Trail: una sola línea por el hueco central (psi = 0), a ras de las rayas: hilo rojo fino y recto,
   mancha rosa al llegar a la bola, pasa por debajo y sale como cola ondulada naranja y amarilla.
 - Ball: bola de cromo gris satinado hundida en un hoyo de la superficie.
-- Title: "TAME IMPALA" y "CURRENTS" en naranja.
+- TitleBand y TitleAlbum: "TAME IMPALA" y "CURRENTS" en naranja (Archivo Expanded), piezas
+  separadas para que la web las haga clicables.
+- Body: cuerpo negro del álbum (la superficie con el hoyo de la bola, los cantos y el reverso): los
+  huecos entre rayas se ven negros, como en el original, y por detrás no se ve la bola.
+- BackArt: contraportada en el reverso, con rayas lila, título y el tracklist.
 - public/models/ball_env.jpg: panorámica renderizada desde el centro de la bola (rayas, cielo de
   estudio y una ventana de luz arriba a la izquierda) que la web usa como reflejo del cromo.
 Coordenadas de cálculo "de imagen" (0..1, y hacia abajo), medidas sobre la portada original.
@@ -16,15 +21,19 @@ Ejecutar desde Blender: CURRENTS_PATH = ".../blender/currents.py"; exec(open(CUR
 """
 import math
 import os
+import sys
 
 import bmesh
 import bpy
-from mathutils import Matrix, Vector, noise
+import numpy as np
+from mathutils import Matrix, Vector
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__ if "__file__" in globals() else CURRENTS_PATH)))
 OUT = os.path.join(ROOT, "public", "models", "currents.glb")
 ENV_OUT = os.path.join(ROOT, "public", "models", "ball_env.jpg")
-FONT = "/usr/share/fonts/liberation/LiberationSans-Bold.ttf"
+FONT = os.path.join(ROOT, "blender", "fonts", "ArchivoExpanded-Bold.ttf")
+sys.path.insert(0, os.path.join(ROOT, "blender"))
+from flow import Flow, contours, simplify  # noqa: E402
 
 BALL = Vector((0.53, 0.62))  # imagen
 BALL_R = 0.105  # imagen (la portada mide 1)
@@ -35,14 +44,17 @@ PERIOD = 1 / 70  # separación entre rayas en unidades de psi
 GAP = 0.008  # medio hueco central (psi) por donde pasa la estela
 STRIPE_WIDTH = 0.0088  # ancho de cada raya lila (imagen)
 STRIPE_HEIGHT = 0.0035  # grosor de cada raya (imagen)
-WAVE_AMP = 0.03  # amplitud lateral de las ondas (imagen)
+TURBULENCE = 0.042  # amplitud de los meandros de la franja inferior (unidades de psi: ~2 rayas)
+GRID = 640  # resolución de la rejilla sobre la que se trazan las curvas de nivel
 WAVE_LIFT = 0.055  # amplitud en altura de las ondas (imagen): relieve visible al girar
 SIDES = 6
 FLOW_R = BALL_R * 0.85  # radio del flujo: algo menor que la bola para que las rayas se peguen a ella
 DENT = 0.075  # profundidad del hoyo que hace la bola en la superficie (imagen)
 DENT_WIDTH = 0.11  # alcance del hoyo desde el centro de la bola (imagen)
 SINK = 0.45  # altura del centro de la bola sobre el fondo del hoyo, en radios
-TITLE_LIFT = 0.07  # el texto flota por delante de la superficie (imagen): capa propia para el parallax
+TITLE_WIDTH = 0.255  # ancho de "TAME IMPALA" en la portada original (imagen)
+TITLE_LIFT = 0.07
+BACK_DEPTH = 0.1  # grosor del cuerpo del álbum bajo la superficie (imagen)  # el texto flota por delante de la superficie (imagen): capa propia para el parallax
 TRAIL_THIN = 0.0032  # medio ancho del hilo rojo (imagen)
 SMEAR = 0.2  # distancia antes de la bola en la que el hilo se abre en una mancha rosa (imagen)
 SMEAR_WIDTH = 0.026  # medio ancho de la mancha junto a la bola (imagen)
@@ -95,54 +107,10 @@ def along_across(p):
 	return rel.dot(DIR), rel.dot(PERP)
 
 
-def wake(p):
-	"""0 antes de la bola; abanico que se abre detrás de ella."""
-	a, c = along_across(p)
-	spread = 0.06 + 1.1 * max(a, 0.0)
-	fan = math.exp(-((c / spread) ** 2))
-	return smoothstep(-0.06, 0.12, a) * fan
-
-
-def warp(p):
-	"""Deformación de la estela: desplazamiento lateral y altura (todo en imagen)."""
-	w = wake(p)
-	if w < 1e-4:
-		return p.copy(), 0.0
-	a, _ = along_across(p)
-	n = noise.noise(Vector((p.x * 5, p.y * 5, 0.3)))
-	phase = a * 34 + n * 6
-	q = p + PERP * (w * WAVE_AMP * math.sin(phase))
-	q += Vector((noise.noise(Vector((q.x * 13, q.y * 13, 1.7))), noise.noise(Vector((q.x * 13, q.y * 13, 4.1))))) * (w * 0.022)
-	lift = w * WAVE_LIFT * (0.5 + 0.5 * math.sin(phase + 1.2))
-	return q, lift
-
-
 def dent(p):
 	"""Hoyo suave alrededor de la bola: la superficie cede bajo su peso (valor negativo)."""
 	r = (p - BALL).length
 	return -DENT * math.exp(-((r / DENT_WIDTH) ** 2))
-
-
-def across_for(a, c):
-	"""Resuelve psi(a, b) = c para b (mismo lado que c), por bisección."""
-	sign = 1 if c >= 0 else -1
-	c = abs(c)
-	lo = math.sqrt(max(FLOW_R * FLOW_R - a * a, 0.0)) + 1e-6
-	hi = c + BALL_R + 1.0
-	for _ in range(40):
-		mid = (lo + hi) / 2
-		if mid * (1 - FLOW_R * FLOW_R / (a * a + mid * mid)) < c:
-			lo = mid
-		else:
-			hi = mid
-	return sign * (lo + hi) / 2
-
-
-def along_samples():
-	"""Pocas muestras en el tramo recto, muchas cerca de la bola y en la estela."""
-	upstream = [-1.3 + (1.15 * i / 24) for i in range(24)]
-	downstream = [-0.15 + (1.05 * i / 260) for i in range(261)]
-	return upstream + downstream
 
 
 def inside(p):
@@ -231,10 +199,34 @@ def finish_mesh(name, bm, mat, color_of=None):
 	return obj
 
 
-def build_stripes(mat):
+FLOW = Flow(BALL, FLOW_R, TURBULENCE, WAVE_LIFT)
+
+
+def flow_grid():
+	"""El campo de corriente muestreado en una rejilla sobre el dominio; bajo la bola, sin datos."""
+	step = (DOMAIN_X[1] - DOMAIN_X[0]) / GRID
+	gy, gx = np.mgrid[0:GRID + 1, 0:GRID + 1]
+	x, y = DOMAIN_X[0] + gx * step, DOMAIN_Y[0] + gy * step
+	values = FLOW.field(x, y)
+	values[np.hypot(x - BALL.x, y - BALL.y) < BALL_R * 0.97] = np.nan
+	return values, step
+
+
+def level_lines(values, step, level):
+	"""Curvas psi = level en coordenadas de imagen, sin puntos de sobra en los tramos rectos."""
+	for line in contours(values, level):
+		pts = simplify([(DOMAIN_X[0] + j * step, DOMAIN_Y[0] + i * step) for i, j in line])
+		if len(pts) > 3:
+			yield [Vector(p) for p in pts]
+
+
+def height(p):
+	return float(FLOW.lift(p.x, p.y)) + dent(p)
+
+
+def build_stripes(mat, values, step):
 	bm = bmesh.new()
 	uv_layer = bm.loops.layers.uv.new("UVMap")
-	samples = along_samples()
 	for side in (-1, 1):
 		k = 0
 		while True:
@@ -242,12 +234,8 @@ def build_stripes(mat):
 			k += 1
 			if abs(c) > 0.9:
 				break
-			line = []
-			for a in samples:
-				p = BALL + DIR * a + PERP * across_for(a, c)
-				q, lift = warp(p)
-				line.append((q, lift + dent(p), 0.0))
-			for run in clip_runs(line):
+			for pts in level_lines(values, step, c):
+				run = [(p, height(p), 0.0) for p in pts]
 				add_tube(bm, uv_layer, run, lambda _: STRIPE_WIDTH / 2, STRIPE_HEIGHT / 2, lambda p, _: (p.x, p.y))
 	return finish_mesh("Stripes", bm, mat, stripe_color)
 
@@ -262,18 +250,30 @@ def trail_width(a):
 	return TAIL_WIDTH + (SMEAR_WIDTH - TAIL_WIDTH) * (1 - smoothstep(BALL_R, BALL_R + 0.08, a))
 
 
-def build_trail(mat):
-	"""Una sola línea por el hueco central (psi = 0), pintada a ras de las rayas: entra recta por la
-	esquina, pasa por debajo de la bola y sale por abajo ondulada con las mismas ondas."""
+def trail_path(values, step):
+	"""Recta por el hueco central hasta pasar bajo la bola; detrás sigue la curva psi = 0 de la
+	estela, con los mismos meandros que las rayas. Devuelve [(p_imagen, avance a), ...]."""
+	start = BALL.length + 0.1  # empieza justo fuera de la portada, arriba a la izquierda
+	path = [(BALL + DIR * a, a) for a in np.linspace(-start, BALL_R * 0.97, 240)]
+	exit_point = BALL + DIR * BALL_R
+	lines = list(level_lines(values, step, 0.0))
+	best = min(lines, key=lambda pts: min((pts[0] - exit_point).length, (pts[-1] - exit_point).length))
+	if (best[-1] - exit_point).length < (best[0] - exit_point).length:
+		best.reverse()
+	a, prev = path[-1][1], path[-1][0]
+	for p in best:
+		a += (p - prev).length
+		path.append((p, a))
+		prev = p
+	return path
+
+
+def build_trail(mat, values, step):
+	"""Una sola línea por el hueco central (psi = 0), a ras de las rayas: entra recta por la
+	esquina, pasa por debajo de la bola y sale por abajo con los meandros de la estela."""
 	bm = bmesh.new()
 	uv_layer = bm.loops.layers.uv.new("UVMap")
-	start = BALL.length + 0.1  # empieza justo fuera de la portada, arriba a la izquierda
-	steps = [-start + (start + 1.3) * i / 520 for i in range(521)]
-	line = []
-	for a in steps:
-		p = BALL + DIR * a
-		q, lift = warp(p)
-		line.append((q, lift + dent(p) + 0.0006, a))  # a ras de las rayas, apenas por encima
+	line = [(p, height(p) + 0.0006, a) for p, a in trail_path(values, step)]  # apenas por encima
 	for run in clip_runs(line):
 		add_tube(bm, uv_layer, run, trail_width, STRIPE_HEIGHT / 2, lambda _, a: (a, 0.0))
 	return finish_mesh("Trail", bm, mat, trail_color)
@@ -304,32 +304,114 @@ def material(name, color, metallic, roughness, emission=0.0):
 	return mat
 
 
-def build_title():
-	"""Texto naranja de la banda superior, como en la portada, convertido a malla."""
-	mat = material("Title", TITLE_ORANGE, 0.0, 0.5, emission=1.0)
-	font = bpy.data.fonts.load(FONT, check_existing=True) if os.path.exists(FONT) else None
-	parts = []
-	for body, x, align in (("TAME IMPALA", 0.035, "LEFT"), ("CURRENTS", 0.965, "RIGHT")):
-		bpy.ops.object.text_add(location=to_world(Vector((x, 0.042)), TITLE_LIFT))
-		obj = bpy.context.active_object
-		obj.data.body = body
-		obj.data.align_x = align
-		obj.data.size = 0.062
-		obj.data.extrude = 0.003
-		if font:
-			obj.data.font = font
-		parts.append(obj)
-	bpy.ops.object.select_all(action="DESELECT")
-	for obj in parts:
-		obj.select_set(True)
-	bpy.context.view_layer.objects.active = parts[0]
+TRACKS = (
+	("Let It Happen", "7:47"), ("Nangs", "1:47"), ("The Moment", "4:15"), ("Yes I'm Changing", "4:30"),
+	("Eventually", "5:19"), ("Gossip", "0:55"), ("The Less I Know the Better", "3:36"),
+	("Past Life", "3:48"), ("Disciples", "1:48"), ("'Cause I'm a Man", "4:01"),
+	("Reality in Motion", "4:12"), ("Love/Paranoia", "3:05"), ("New Person, Same Old Mistakes", "6:03"),
+)
+
+
+def add_text(body, location, size, align="LEFT", back=False):
+	"""Texto convertido a malla; back=True lo gira para leerse desde el reverso."""
+	bpy.ops.object.text_add(location=location, rotation=(0, math.pi, 0) if back else (0, 0, 0))
+	obj = bpy.context.active_object
+	obj.data.body = body
+	obj.data.align_x = align
+	obj.data.font = bpy.data.fonts.load(FONT, check_existing=True)
+	obj.data.size = size
+	obj.data.extrude = 0.003
+	obj.data.resolution_u = 3  # letras pequeñas: con pocas subdivisiones basta
 	bpy.ops.object.convert(target="MESH")
+	return obj
+
+
+def title_size():
+	"""Cuerpo del título para que "TAME IMPALA" mida lo mismo que en la portada original."""
+	probe = add_text("TAME IMPALA", (0, 0, 0), 0.05)
+	size = 0.05 * TITLE_WIDTH * 2 / probe.dimensions.x
+	bpy.data.objects.remove(probe, do_unlink=True)
+	return size
+
+
+def build_title(size):
+	"""Texto naranja de la banda superior, como en la portada: dos piezas clicables en la web."""
+	mat = material("Title", TITLE_ORANGE, 0.0, 0.5, emission=1.0)
+	for name, body, x, align in (("TitleBand", "TAME IMPALA", 0.035, "LEFT"), ("TitleAlbum", "CURRENTS", 0.965, "RIGHT")):
+		obj = add_text(body, to_world(Vector((x, 0.042)), TITLE_LIFT), size, align)
+		obj.name = obj.data.name = name
+		obj.data.materials.clear()
+		obj.data.materials.append(mat)
+
+
+def build_body():
+	"""Cuerpo negro: superficie con el hoyo de la bola (justo bajo las rayas), cantos y reverso."""
+	n = 160
+	bottom = -BACK_DEPTH
+	bm = bmesh.new()
+	top = [[bm.verts.new(to_world(Vector((i / n, j / n)), dent(Vector((i / n, j / n))) - 0.001)) for i in range(n + 1)]
+		for j in range(n + 1)]
+	for j in range(n):
+		for i in range(n):
+			bm.faces.new((top[j][i], top[j + 1][i], top[j + 1][i + 1], top[j][i + 1]))
+	ring = [top[0][i] for i in range(n)] + [top[j][n] for j in range(n)]
+	ring += [top[n][i] for i in range(n, 0, -1)] + [top[j][0] for j in range(n, 0, -1)]
+	low = [bm.verts.new((v.co.x, v.co.y, bottom * 2)) for v in ring]
+	for k in range(len(ring)):
+		k2 = (k + 1) % len(ring)
+		bm.faces.new((ring[k], ring[k2], low[k2], low[k]))
+	bm.faces.new(low)
+	finish_mesh("Body", bm, material("Body", (0.025, 0.012, 0.035), 0.0, 0.8))
+
+
+def build_back(size):
+	"""Contraportada, para leerse desde detrás: título, tracklist y una banda de rayas lila.
+	(u, v) son coordenadas vistas desde el reverso: u hacia la derecha del que mira, v hacia arriba."""
+	z = -BACK_DEPTH * 2 - 0.002
+	orange = material("BackTitle", TITLE_ORANGE, 0.0, 0.5, emission=1.0)
+	lilac = material("BackLilac", LILAC_NEAR, 0.0, 0.5, emission=0.6)
+	red = material("BackRed", RED, 0.0, 0.5, emission=0.8)
+
+	def at(u, v):
+		return (-u, v, z)
+
+	parts = [(add_text("TAME IMPALA", at(-0.93, 0.84), size, "LEFT", True), orange),
+		(add_text("CURRENTS", at(0.93, 0.84), size, "RIGHT", True), orange)]
+	for k, (title, time) in enumerate(TRACKS):
+		v = 0.6 - k * 0.075
+		parts.append((add_text(f"{k + 1:02d}", at(-0.86, v), size * 0.75, "LEFT", True), lilac))
+		parts.append((add_text(title.upper(), at(-0.7, v), size * 0.75, "LEFT", True), orange))
+		parts.append((add_text(time, at(0.86, v), size * 0.75, "RIGHT", True), lilac))
+
+	bm = bmesh.new()  # banda de rayas lila abajo, cruzada por el hilo rojo
+	for k in range(22):
+		v = -0.5 - k * 0.021
+		quad = [bm.verts.new(at(u, v + dv)) for u, dv in ((-1, 0), (1, 0), (1, -0.011), (-1, -0.011))]
+		bm.faces.new(quad)
+	stripes = finish_mesh("BackStripes", bm, lilac)
+	bm = bmesh.new()
+	line = [bm.verts.new(at(u, v)) for u, v in ((-1, -0.62), (1, -0.9), (1, -0.892), (-1, -0.612))]
+	bm.faces.new(line)
+	thread = finish_mesh("BackThread", bm, red)
+	parts += [(stripes, lilac), (thread, red)]
+
+	for obj, mat in parts:
+		obj.data.materials.clear()
+		obj.data.materials.append(mat)
+	bpy.ops.object.select_all(action="DESELECT")
+	for obj, _ in parts:
+		obj.select_set(True)
+	bpy.context.view_layer.objects.active = parts[0][0]
 	bpy.ops.object.join()
-	title = bpy.context.active_object
-	title.name = "Title"
-	title.data.name = "Title"
-	title.data.materials.clear()
-	title.data.materials.append(mat)
+	back = bpy.context.active_object
+	back.name = back.data.name = "BackArt"
+	bm = bmesh.new()  # todas las caras hacia -Z, para que el reverso se vea desde detrás
+	bm.from_mesh(back.data)
+	for f in bm.faces:
+		if f.normal.z > 0:
+			f.normal_flip()
+	bm.to_mesh(back.data)
+	bm.free()
 
 
 def clear_scene():
@@ -343,8 +425,10 @@ def clear_scene():
 
 def build():
 	clear_scene()
-	build_stripes(vertex_color_material("Stripes", 0.5))
-	build_trail(vertex_color_material("Trail", 0.35))
+	values, step = flow_grid()
+	build_stripes(vertex_color_material("Stripes", 0.5), values, step)
+	build_trail(vertex_color_material("Trail", 0.35), values, step)
+	build_body()
 
 	radius = BALL_R * 2
 	center = to_world(BALL)
@@ -358,7 +442,9 @@ def build():
 	ball.data.materials.append(material("Chrome", (0.66, 0.66, 0.7), 1.0, 0.3))
 	bpy.ops.object.shade_smooth()
 
-	build_title()
+	size = title_size()
+	build_title(size)
+	build_back(size)
 
 
 def render_ball_env():
@@ -434,7 +520,7 @@ def render_ball_env():
 def export():
 	os.makedirs(os.path.dirname(OUT), exist_ok=True)
 	bpy.ops.object.select_all(action="DESELECT")
-	for name in ("Ball", "Stripes", "Trail", "Title"):
+	for name in ("Ball", "Stripes", "Trail", "TitleBand", "TitleAlbum", "Body", "BackArt"):
 		bpy.data.objects[name].select_set(True)
 	bpy.ops.export_scene.gltf(
 		filepath=OUT,
