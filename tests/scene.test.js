@@ -78,6 +78,24 @@ test("los atajos no interceptan combinaciones del navegador ni campos de texto",
 	assert.equal(app.stats.resets, 1);
 });
 
+test("la tecla T y el botón abren y cierran el tracklist; Escape lo cierra", () => {
+	const app = setup();
+	const panel = app.elements.get("#tracklist");
+	const button = app.elements.get("#tracklist-toggle");
+	panel.hidden = true;
+	const key = app.listeners.get("keydown");
+	key({ key: "t" });
+	assert.equal(panel.hidden, false);
+	assert.equal(button["aria-expanded"], "true");
+	key({ key: "Escape" });
+	assert.equal(panel.hidden, true);
+	assert.equal(button["aria-expanded"], "false");
+	button.click();
+	assert.equal(panel.hidden, false);
+	key({ key: "t", metaKey: true });
+	assert.equal(panel.hidden, false);
+});
+
 test("los planos conservan el interior y recortan el exterior al inclinar", () => {
 	const app = setup();
 	app.run("setTarget(1, 1); renderer.frame(16.67)");

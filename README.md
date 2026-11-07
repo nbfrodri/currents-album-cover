@@ -22,6 +22,7 @@ Para probarlo en el móvil (misma red Wi‑Fi): `npx vite --host` y abrir la IP 
 | Clic derecho / dos dedos | Desplaza la vista |
 | Botón **Centrar** o tecla `R` | Vuelve a la vista inicial |
 | Botón **Sonido** o tecla `S` | Activa/desactiva la banda sonora ambiental |
+| Botón **Tracklist** o tecla `T` | Muestra/oculta la lista de canciones (`Esc` la cierra) |
 | Sin interacción 2,5 s | Balanceo automático |
 
 ## Técnicas
@@ -43,7 +44,7 @@ Para probarlo en el móvil (misma red Wi‑Fi): `npx vite --host` y abrir la IP 
 - Modelo comprimido con **Draco** (~300 KB); decodificador local en `public/draco/`.
 - Si los primeros 2 s van por debajo de 45 fps, baja la resolución interna.
 - Respeta `prefers-reduced-motion`: sin balanceo automático; también responde a cambios de la preferencia con la página abierta.
-- Controles accesibles por teclado (`S`, `R`, foco visible) y con `aria-pressed`; los atajos respetan los modificadores y los campos de texto.
+- Controles accesibles por teclado (`S`, `R`, `T`, foco visible) y con `aria-pressed`; los atajos respetan los modificadores y los campos de texto.
 - El giroscopio necesita un navegador compatible y un contexto seguro (HTTPS o localhost). En iOS, toca la página para solicitar permiso; una IP de la red local por HTTP permite probar el puntero, pero no garantiza acceso al sensor.
 
 ## Verificación

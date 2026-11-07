@@ -146,12 +146,22 @@ async function toggleSound() {
 }
 soundButton.addEventListener("click", toggleSound);
 
+const tracklist = document.querySelector("#tracklist");
+const tracklistButton = document.querySelector("#tracklist-toggle");
+function setTracklist(open) {
+	tracklist.hidden = !open;
+	tracklistButton.setAttribute("aria-expanded", String(open));
+}
+tracklistButton.addEventListener("click", () => setTracklist(tracklist.hidden));
+
 window.addEventListener("keydown", (e) => {
 	if (e.repeat || e.defaultPrevented || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
 	if (e.target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName)) return;
 	const k = e.key.toLowerCase();
 	if (k === "s") toggleSound();
 	if (k === "r") controls.reset();
+	if (k === "t") setTracklist(tracklist.hidden);
+	if (k === "escape" && !tracklist.hidden) setTracklist(false);
 });
 
 // Interacción: ratón, táctil y giroscopio
