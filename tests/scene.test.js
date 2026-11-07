@@ -92,9 +92,9 @@ function setup(orientation) {
 	return { run: (code) => vm.runInContext(code, context), listeners, window, preference, elements, stats };
 }
 
-test("el zoom hacia fuera se queda cerca del encuadre inicial", () => {
+test("el zoom hacia fuera no pasa del encuadre inicial", () => {
 	const app = setup();
-	assert.ok(app.run("controls.maxDistance <= camera.position.length() * 1.3 + 1e-9"));
+	assert.ok(app.run("Math.abs(controls.maxDistance - camera.position.length()) < 1e-9"));
 });
 
 test("la pantalla de carga se va cuando llega el modelo y la portada entra girando", () => {

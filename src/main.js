@@ -341,7 +341,7 @@ function resize() {
 	// distancia que encaja la portada (con margen) tanto en horizontal como en vertical
 	const fit = (COVER * 1.45) / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / Math.min(camera.aspect, 1);
 	controls.minDistance = fit * 0.35;
-	controls.maxDistance = fit * 1.3; // poco más lejos que el encuadre inicial: la portada no se pierde
+	controls.maxDistance = fit; // no se aleja más que el encuadre inicial: la portada no se pierde
 	camera.far = Math.max(50, controls.maxDistance + COVER * 2);
 	camera.updateProjectionMatrix();
 	if (!framed) {
