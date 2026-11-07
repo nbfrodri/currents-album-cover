@@ -50,3 +50,12 @@ test("la edad del golpe vuelve a cero en cada bombo y crece entre golpes", () =>
 	assert.ok(after.age > 1); // sin golpes, la edad sigue creciendo
 	assert.ok(frames.length > 0);
 });
+
+test("al empezar a sonar (al pulsar la bola) el primer golpe no es exagerado", () => {
+	const beat = createBeat();
+	for (let f = 0; f < 60; f++) beat.update(0, frame); // silencio antes de pulsar
+	const first = kicks(beat, 0.5).map(({ pulse }) => pulse);
+	assert.ok(Math.max(...first) < 0.4, `primer golpe ${Math.max(...first)}`);
+	const later = kicks(beat, 3).filter(({ t }) => t >= 2).map(({ pulse }) => pulse);
+	assert.ok(Math.max(...later) > 0.6); // luego late con normalidad
+});

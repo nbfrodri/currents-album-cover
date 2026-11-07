@@ -11,6 +11,7 @@ import * as waves from "../src/waves.js";
 import * as beat from "../src/beat.js";
 import * as back from "../src/back.js";
 import * as backdrop from "../src/backdrop.js";
+import * as halo from "../src/halo.js";
 
 function setup(orientation) {
 	const listeners = new Map();
@@ -72,7 +73,7 @@ function setup(orientation) {
 	const context = vm.createContext({
 		THREE: { ...THREE, WebGLRenderer: Renderer, TextureLoader: Loader }, ...shaders,
 		GLTFLoader: Loader, DRACOLoader: Loader, OrbitControls: Controls,
-		...tracks, ...panel, ...sheet, ...waves, ...beat, ...back, ...backdrop,
+		...tracks, ...panel, ...sheet, ...waves, ...beat, ...back, ...backdrop, ...halo,
 		drawVisualizer() {},
 		createPlayer() {
 			let listener = null, playing = false, index = 0;

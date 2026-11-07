@@ -45,3 +45,25 @@ test("la línea del medio lleva un gradiente animado de principio a fin, sin tin
 	assert.equal("uTint" in trailUniforms, false);
 	assert.ok(shader.uniforms.uTime); // comparte el reloj de las ondas
 });
+
+test("de frente el latido se ve como luz: las rayas brillan con la onda y las crestas, la estela no", async () => {
+	const THREE = await import("three");
+	const { addWaves, trailWaves } = await import("../src/waves.js");
+	const compile = (material) => {
+		const shader = {
+			uniforms: {},
+			vertexShader: "#include <common>\n#include <begin_vertex>",
+			fragmentShader: "#include <common>\n#include <color_fragment>\n#include <emissivemap_fragment>",
+		};
+		material.onBeforeCompile(shader);
+		return shader;
+	};
+	const stripeMaterial = new THREE.MeshStandardMaterial();
+	addWaves(stripeMaterial);
+	const lit = compile(stripeMaterial);
+	assert.match(lit.vertexShader, /vBeat = shock \* [\d.]+ \+ uPulse/);
+	assert.match(lit.fragmentShader, /totalEmissiveRadiance \+= .*vBeat/);
+	const trail = new THREE.MeshStandardMaterial();
+	trailWaves(trail);
+	assert.doesNotMatch(compile(trail).fragmentShader, /vBeat/);
+});

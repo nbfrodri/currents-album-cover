@@ -14,6 +14,7 @@ export function createBeat() {
 	let average = null;
 	let last = 0;
 	let age = 99; // segundos desde el último golpe (para las ondas que salen de la bola)
+	let warm = 0; // segundos con señal desde el último silencio
 	return {
 		get age() {
 			return age;
@@ -24,7 +25,10 @@ export function createBeat() {
 			envelope = follow(envelope, bass, bass > envelope ? ATTACK : RELEASE, dt);
 			average = follow(average, bass, MEMORY, dt);
 			const excess = bass > FLOOR ? (envelope - average) / Math.max(average * RANGE, 0.02) : 0;
-			const pulse = Math.min(Math.max(excess, 0), 1);
+			// al arrancar (o tras un silencio) la media aún no sabe cómo suena el tema y el primer
+			// golpe saldría enorme: el latido entra poco a poco durante MEMORY segundos
+			warm = bass > FLOOR ? warm + dt : 0;
+			const pulse = Math.min(Math.max(excess, 0), 1) * Math.min(warm / MEMORY, 1);
 			age = pulse > 0.5 && last <= 0.5 ? 0 : age + dt;
 			last = pulse;
 			return pulse;

@@ -61,7 +61,10 @@ const WAVE_VERTEX = `
 	float db = length(fromBall);
 	float shock = exp(-pow((db - uBeatAge * 1.4) * 9.0, 2.0)) * exp(-uBeatAge * 2.2);
 	transformed.y += shock * 0.035;
-	transformed.xz += fromBall / max(db, 1e-4) * shock * 0.014;
+	transformed.xz += fromBall / max(db, 1e-4) * shock * 0.02; // en el plano: se ve también de frente
+	// luz del latido (las rayas la usan; de frente la altura apenas se ve, la luz sí): el anillo
+	// que sale de la bola y, suave, las crestas con el pulso del bombo
+	vBeat = shock * 0.45 + uPulse * smoothstep(0.004, 0.03, lifted) * 0.35;
 	float water = 0.0;
 	vec2 sway = vec2(0.0);
 	for (int i = 0; i < ${TRAIL_POINTS}; i++) {
@@ -87,10 +90,18 @@ export function addWaves(material, extra = {}) {
 	material.onBeforeCompile = (shader) => {
 		Object.assign(shader.uniforms, waveUniforms, extra.uniforms);
 		shader.vertexShader = shader.vertexShader
-			.replace("#include <common>", `#include <common>\nuniform float uTime, uBass, uPulse, uBeatAge;\nuniform vec2 uBall;\nuniform vec4 uTrail[${TRAIL_POINTS}];\n${extra.vertexHead ?? ""}`)
+			.replace("#include <common>", `#include <common>\nuniform float uTime, uBass, uPulse, uBeatAge;\nuniform vec2 uBall;\nuniform vec4 uTrail[${TRAIL_POINTS}];\nvarying float vBeat;\n${extra.vertexHead ?? ""}`)
 			.replace("#include <begin_vertex>", `#include <begin_vertex>\n${WAVE_VERTEX}\n${extra.vertexBody ?? ""}`);
-		if (extra.fragment) extra.fragment(shader);
+		(extra.fragment ?? beatGlow)(shader);
 	};
+}
+
+// Rayas: se iluminan en lila claro donde pasa la onda del latido y en las crestas con el bombo
+function beatGlow(shader) {
+	shader.fragmentShader = shader.fragmentShader
+		.replace("#include <common>", "#include <common>\nvarying float vBeat;")
+		.replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+	totalEmissiveRadiance += (diffuseColor.rgb * 0.7 + vec3(0.1, 0.06, 0.18)) * vBeat * 0.8;`);
 }
 
 // La línea del medio (hilo, mancha y cola): gradiente animado que recorre toda la línea
