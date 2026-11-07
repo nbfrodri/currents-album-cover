@@ -188,13 +188,10 @@ loader.load("/models/currents.glb", (gltf) => {
 
 // Reproductor y tracklist
 const player = createPlayer(TRACKS);
-let started = false; // la estela solo se tiñe cuando ya ha sonado algo
+let started = false; // la franja de la contraportada aparece cuando ya ha sonado algo
 const panel = mountPanel(document, player, TRACKS, (state) => {
 	started ||= state.playing;
 	if (started) placeBackMarker(state.index);
-	trailUniforms.uTint.value.set(TRACKS[state.index].tint);
-	const duration = Number.isFinite(state.duration) ? state.duration : 0;
-	trailUniforms.uProgress.value = duration ? state.current / duration : 0;
 });
 const tracklist = document.querySelector("#tracklist");
 const setTracklist = panel.setOpen;
@@ -386,7 +383,6 @@ renderer.setAnimationLoop(() => {
 	const { kick, bass, mid, freq } = player.levels();
 	waveUniforms.uTime.value = t;
 	waveUniforms.uBass.value = THREE.MathUtils.lerp(waveUniforms.uBass.value, reducedMotion ? 0 : bass, 0.3);
-	trailUniforms.uActive.value = THREE.MathUtils.lerp(trailUniforms.uActive.value, started ? 1 : 0, 0.05);
 	// la bola late con cada golpe de graves (bump rápido que se relaja) y respira con el volumen
 	const dt = Math.min(t - lastFrame, 0.1);
 	lastFrame = t;

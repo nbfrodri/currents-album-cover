@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { TRACKS } from "./tracks.js";
 
 // Uniformes compartidos por los shaders inyectados: ondas al pasar el ratón, pulso con los graves
 // y la estela que se tiñe con el tema y avanza con su progreso
@@ -26,11 +25,23 @@ export function addTrailPoint(point, time) {
 	lastTrail = { x: point.x, z: point.z };
 }
 export const trailUniforms = {
-	uTint: { value: new THREE.Color(TRACKS[0].tint) },
-	uProgress: { value: 0 },
-	uActive: { value: 0 },
-	uRange: { value: new THREE.Vector2(0, 1) },
+	uRange: { value: new THREE.Vector2(0, 1) }, // avance (uv.x) del principio y el final de la línea
 };
+
+// Gradiente de la línea del medio: los colores de la estela del original en ciclo, que fluyen de
+// principio a fin. TRAIL_FLOW = vueltas del gradiente por segundo.
+const TRAIL_FLOW = 0.12;
+const TRAIL_GRADIENT = `
+	vec3 trailGradient(float s) {
+		vec3 red = vec3(0.95, 0.08, 0.18), pink = vec3(1.0, 0.3, 0.55);
+		vec3 orange = vec3(1.0, 0.55, 0.1), yellow = vec3(1.0, 0.82, 0.25);
+		s = fract(s) * 4.0;
+		if (s < 1.0) return mix(red, pink, smoothstep(0.0, 1.0, s));
+		if (s < 2.0) return mix(pink, orange, smoothstep(1.0, 2.0, s));
+		if (s < 3.0) return mix(orange, yellow, smoothstep(2.0, 3.0, s));
+		return mix(yellow, red, smoothstep(3.0, 4.0, s));
+	}
+`;
 
 // Las crestas suben con los graves. Cada gota del ratón: ondas de agua (varias crestas, onda
 // larga) que solo existen donde ya ha llegado el frente, se amortiguan con la distancia y se
@@ -75,7 +86,7 @@ export function addWaves(material, extra = {}) {
 	};
 }
 
-// La estela: el tema que suena la tiñe, y una cabeza brillante la recorre según el progreso
+// La línea del medio (hilo, mancha y cola): gradiente animado que recorre toda la línea
 export function trailWaves(material) {
 	addWaves(material, {
 		key: "trail-waves",
@@ -84,12 +95,12 @@ export function trailWaves(material) {
 		vertexBody: "vAlong = uv.x;",
 		fragment(shader) {
 			shader.fragmentShader = shader.fragmentShader
-				.replace("#include <common>", "#include <common>\nuniform vec3 uTint;\nuniform float uProgress, uActive;\nuniform vec2 uRange;\nvarying float vAlong;")
-				.replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, uTint, 0.2 * uActive);")
+				.replace("#include <common>", `#include <common>\nuniform float uTime;\nuniform vec2 uRange;\nvarying float vAlong;\n${TRAIL_GRADIENT}`)
+				.replace("#include <color_fragment>", `#include <color_fragment>
+	float along = (vAlong - uRange.x) / max(uRange.y - uRange.x, 1e-4);
+	diffuseColor.rgb = trailGradient(along * 1.5 - uTime * ${TRAIL_FLOW});`)
 				.replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
-	float head = mix(uRange.x, uRange.y, uProgress);
-	float glow = exp(-pow((vAlong - head) * 10.0, 2.0));
-	totalEmissiveRadiance += uActive * uTint * glow * 1.2; // solo una luz suave que recorre la estela`);
+	totalEmissiveRadiance += diffuseColor.rgb * 0.25; // que brille un poco, como la estela del original`);
 		},
 	});
 }

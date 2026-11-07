@@ -27,3 +27,21 @@ test("las rayas y la estela no comparten programa: las rayas nunca se tiñen con
 	trailWaves(trail);
 	assert.notEqual(stripes.customProgramCacheKey(), trail.customProgramCacheKey());
 });
+
+test("la línea del medio lleva un gradiente animado de principio a fin, sin tinte por tema", async () => {
+	const THREE = await import("three");
+	const { trailWaves, trailUniforms } = await import("../src/waves.js");
+	const material = new THREE.MeshStandardMaterial();
+	trailWaves(material);
+	const shader = {
+		uniforms: {},
+		vertexShader: "#include <common>\n#include <begin_vertex>",
+		fragmentShader: "#include <common>\n#include <color_fragment>\n#include <emissivemap_fragment>",
+	};
+	material.onBeforeCompile(shader);
+	assert.match(shader.fragmentShader, /uTime/); // se mueve con el tiempo
+	assert.match(shader.fragmentShader, /uRange/); // a lo largo de toda la línea
+	assert.doesNotMatch(shader.fragmentShader, /uTint|uProgress/);
+	assert.equal("uTint" in trailUniforms, false);
+	assert.ok(shader.uniforms.uTime); // comparte el reloj de las ondas
+});
