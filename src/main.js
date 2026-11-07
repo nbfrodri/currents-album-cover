@@ -142,7 +142,6 @@ function placeBackMarker(index) {
 }
 let model = null;
 const halo = createHalo(clipPlanes); // resplandor y anillo del latido alrededor de la bola
-const BALL_GLOW = new THREE.Color(0xc9aef2); // lila de las rayas: el cromo se ilumina con cada golpe
 
 // Pantalla de carga: una bola cromada que respira mientras llega el modelo. Después la portada
 // toma el relevo con un giro suave; con movimiento reducido no se fuerza la espera.
@@ -169,8 +168,6 @@ loader.load("models/currents.glb", (gltf) => {
 			waveUniforms.uBall.value.set(obj.position.x, obj.position.z);
 			obj.material.envMap = ballEnv;
 			obj.material.envMapIntensity = 1.0;
-			obj.material.emissive?.copy(BALL_GLOW);
-			obj.material.emissiveIntensity = 0;
 			halo.place(obj.position, obj.userData.radius);
 		}
 		if (obj.name === "Body") parts.body = obj;
@@ -409,7 +406,6 @@ renderer.setAnimationLoop(() => {
 		const scale = ballSwell(pulse) + waveUniforms.uBass.value * 0.015;
 		parts.ball.scale.setScalar(scale);
 		parts.ball.position.y = parts.ball.userData.restY + parts.ball.userData.radius * (scale - 1);
-		parts.ball.material.emissiveIntensity = pulse * 0.35; // brillo: se nota de frente y de lejos
 	}
 	halo.update(pulse, reducedMotion ? 99 : beat.age);
 	waveUniforms.uPulse.value = pulse;
