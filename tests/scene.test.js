@@ -21,7 +21,7 @@ function setup(orientation) {
 		return {
 		classes,
 		classList: { toggle(name, on = !classes.has(name)) { classes[on ? "add" : "delete"](name); } },
-		style: { setProperty() {} },
+		style: { setProperty(name, value) { this[name] = value; } },
 		append() {},
 		setAttribute(name, value) { this[name] = value; },
 		addEventListener(name, callback) { this[name] = callback; },
@@ -56,7 +56,10 @@ function setup(orientation) {
 	class Loader {
 		setDRACOLoader() { return this; }
 		setDecoderPath() { return this; }
-		load() { return new THREE.Texture(); }
+		load(url, ready, progress, error) {
+			if (url.endsWith(".glb")) stats.loading = { ready, progress, error };
+			return new THREE.Texture();
+		}
 	}
 	class Controls {
 		constructor(camera) { this.camera = camera; this.listeners = {}; }
@@ -105,6 +108,48 @@ test("la pantalla de carga se va cuando llega el modelo y la portada entra giran
 	assert.ok(!screen.classes.has("done")); // sin modelo sigue la carga
 	app.run("model = new THREE.Group(); const now = performance.now(); performance = { now: () => now + 2000 }; renderer.frame()");
 	assert.ok(screen.classes.has("done"));
+});
+
+test("la carga refleja los bytes reales, se completa y conserva el error legible", () => {
+	const app = setup();
+	app.stats.loading.progress({ lengthComputable: true, loaded: 25, total: 100 });
+	const fill = app.elements.get("#loader-fill");
+	assert.equal(fill.style["--loaded"], "0.25");
+	app.stats.loading.progress({ lengthComputable: false });
+	assert.equal(fill.style["--loaded"], "0.25");
+	app.stats.loading.ready({ scene: new THREE.Group() });
+	assert.equal(fill.style["--loaded"], "1");
+	const failed = setup();
+	failed.stats.loading.error();
+	assert.ok(failed.elements.get("#loader").classes.has("failed"));
+	assert.match(failed.elements.get("#loader-label").textContent, /No se pudo cargar.*Recarga/);
+	failed.run("renderer.frame()");
+	assert.ok(!failed.elements.get("#loader").classes.has("done"));
+});
+
+test("la entrada espera al dibujo y gira con calma después del fundido inicial", () => {
+	const app = setup();
+	app.preference.change({ matches: false });
+	app.run("let clock = startedAt; performance = { now: () => clock }; model = new THREE.Group(); clock += 1800; renderer.frame()");
+	assert.ok(!app.elements.get("#loader").classes.has("done"));
+	app.run("clock = startedAt + 2600; renderer.frame()");
+	assert.ok(app.elements.get("#loader").classes.has("done"));
+	const initial = app.run("cover.rotation.y");
+	app.run("clock += 150; renderer.frame()");
+	assert.equal(app.run("cover.rotation.y"), initial);
+	app.run("clock += 1850; renderer.frame()");
+	assert.ok(app.run("cover.rotation.y > -Math.PI * 0.55 && cover.rotation.y < 0"));
+	app.run("clock += 2000; renderer.frame()");
+	assert.equal(app.run("cover.rotation.y"), 0);
+	assert.equal(app.run("cover.scale.x"), 1);
+});
+
+test("con movimiento reducido la portada aparece sin espera, giro ni escala", () => {
+	const app = setup();
+	app.run("model = new THREE.Group(); renderer.frame()");
+	assert.ok(app.elements.get("#loader").classes.has("done"));
+	assert.equal(app.run("cover.rotation.y"), 0);
+	assert.equal(app.run("cover.scale.x"), 1);
 });
 
 test("al pasar por la bola el cursor es la mano de clicar", () => {
