@@ -76,7 +76,7 @@ function setup(orientation) {
 			};
 			return {
 				toggle: call("toggle", (p) => !p), next: call("next"), prev: call("prev"), play: call("play", () => true),
-				pause: call("pause", () => false), seek() {}, state,
+				pause: call("pause", () => false), seek() {}, setVolume() {}, toggleMute() {}, state,
 				levels: () => ({ bass: 0, mid: 0, high: 0, freq: null }),
 				onChange(fn) { listener = fn; },
 			};

@@ -32,12 +32,16 @@ export function createPlayer(tracks, { createAudio = () => new Audio(), createCo
 	let index = 0;
 	let source = "local";
 	let failed = false;
+	let volume = 1;
+	let muted = false;
 	const listeners = new Set();
 
 	const state = () => ({
 		index,
 		source,
 		failed,
+		volume,
+		muted,
 		playing: Boolean(audio && !audio.paused),
 		current: audio?.currentTime ?? 0,
 		duration: audio?.duration,
@@ -49,6 +53,8 @@ export function createPlayer(tracks, { createAudio = () => new Audio(), createCo
 		audio = createAudio();
 		audio.crossOrigin = "anonymous"; // sin esto el analizador solo vería silencio
 		audio.preload = "metadata";
+		audio.volume = volume;
+		audio.muted = muted;
 		audio.addEventListener("error", () => {
 			if (source === "local") {
 				source = "preview";
@@ -113,6 +119,19 @@ export function createPlayer(tracks, { createAudio = () => new Audio(), createCo
 		emit();
 	}
 
+	function setVolume(value) {
+		volume = Math.min(Math.max(value, 0), 1);
+		muted = false; // mover el volumen quita el silencio
+		if (audio) Object.assign(audio, { volume, muted });
+		emit();
+	}
+
+	function toggleMute() {
+		muted = !muted;
+		if (audio) audio.muted = muted;
+		emit();
+	}
+
 	// Niveles y espectro completo para la portada y el visualizador
 	function levels() {
 		if (!analyser) return { bass: 0, mid: 0, high: 0, freq: null };
@@ -121,7 +140,7 @@ export function createPlayer(tracks, { createAudio = () => new Audio(), createCo
 	}
 
 	return {
-		play, pause, toggle, next, prev, seek, levels, state,
+		play, pause, toggle, next, prev, seek, setVolume, toggleMute, levels, state,
 		onChange(fn) {
 			listeners.add(fn);
 			return () => listeners.delete(fn);

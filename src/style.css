@@ -280,8 +280,8 @@ kbd {
 	background: var(--ink);
 }
 
-/* Barra de progreso con los colores de la estela */
-.seek input {
+/* Barras de progreso y volumen con los colores de la estela */
+.rail {
 	--progress: 0%;
 	width: 100%;
 	height: 16px;
@@ -291,17 +291,17 @@ kbd {
 	cursor: pointer;
 }
 
-.seek input::-webkit-slider-runnable-track {
+.rail::-webkit-slider-runnable-track {
 	height: 4px;
 	background: var(--trail) 0 0 / var(--progress) 100% no-repeat, var(--line);
 }
 
-.seek input::-moz-range-track {
+.rail::-moz-range-track {
 	height: 4px;
 	background: var(--trail) 0 0 / var(--progress) 100% no-repeat, var(--line);
 }
 
-.seek input::-webkit-slider-thumb {
+.rail::-webkit-slider-thumb {
 	appearance: none;
 	width: 12px;
 	height: 12px;
@@ -311,12 +311,32 @@ kbd {
 	border: 0;
 }
 
-.seek input::-moz-range-thumb {
+.rail::-moz-range-thumb {
 	width: 12px;
 	height: 12px;
 	border-radius: 50%;
 	background: #ffd23f;
 	border: 0;
+}
+
+.volume {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: -6px;
+}
+
+.volume .step {
+	width: 36px;
+	height: 36px;
+}
+
+.volume .step[aria-pressed="true"] .waves {
+	display: none;
+}
+
+.volume .step[aria-pressed="true"] {
+	color: var(--muted);
 }
 
 .times {
@@ -331,6 +351,37 @@ kbd {
 	border-top: 1px solid rgb(201 174 242 / 0.14);
 	overflow-y: auto;
 	min-height: 0;
+	scrollbar-gutter: stable;
+}
+
+/* Barra de scroll: una raya lila fina sobre negro, como las de la portada; dorada al usarla */
+.tracks::-webkit-scrollbar {
+	width: 6px;
+}
+
+.tracks::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.tracks::-webkit-scrollbar-thumb {
+	background: rgb(201 174 242 / 0.45);
+	border-radius: 3px;
+}
+
+.tracks::-webkit-scrollbar-thumb:hover,
+.tracks::-webkit-scrollbar-thumb:active {
+	background: var(--gold);
+}
+
+.tracks::-webkit-scrollbar-button {
+	display: none;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+	.tracks {
+		scrollbar-width: thin;
+		scrollbar-color: rgb(201 174 242 / 0.45) transparent;
+	}
 }
 
 .tracks button {

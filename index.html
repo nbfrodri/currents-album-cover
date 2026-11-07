@@ -48,8 +48,16 @@
 
 				<div class="seek">
 					<label for="seek" class="visually-hidden">Posición del tema</label>
-					<input id="seek" type="range" min="0" max="0" step="0.1" value="0" />
+					<input id="seek" class="rail" type="range" min="0" max="0" step="0.1" value="0" />
 					<div class="times"><span id="time-current">0:00</span><span id="time-total">0:00</span></div>
+				</div>
+
+				<div class="volume">
+					<button id="mute" class="step" type="button" aria-label="Silenciar" aria-pressed="false" aria-keyshortcuts="M">
+						<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6 H5 L9 3 V13 L5 10 H2 Z" /><path class="waves" d="M11.5 5.5 Q13.5 8 11.5 10.5 M13 3.5 Q16.5 8 13 12.5" /></svg>
+					</button>
+					<label for="volume" class="visually-hidden">Volumen</label>
+					<input id="volume" class="rail" type="range" min="0" max="1" step="0.01" value="1" />
 				</div>
 
 				<ol id="tracks" class="tracks"></ol>

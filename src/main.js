@@ -4,6 +4,7 @@ import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { createAmbient } from "./audio.js";
 import { createPlayer } from "./player.js";
+import { backRowCenter, backTrackAt } from "./back.js";
 import { mountPanel } from "./panel.js";
 import { glareShader } from "./shaders.js";
 import { TRACKS } from "./tracks.js";
@@ -117,7 +118,23 @@ ballEnv.mapping = THREE.EquirectangularReflectionMapping;
 ballEnv.colorSpace = THREE.SRGBColorSpace;
 
 // Piezas de Blender con interacción
-const parts = { ball: null, body: null, stripes: null, trail: null, TitleBand: null, TitleAlbum: null };
+const parts = { ball: null, body: null, back: null, stripes: null, trail: null, TitleBand: null, TitleAlbum: null };
+
+// Franja dorada sobre el tema que suena en el tracklist de la contraportada
+const backMarker = new THREE.Mesh(
+	new THREE.PlaneGeometry(1, 1),
+	new THREE.MeshBasicMaterial({ color: 0xf2b544, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }),
+);
+backMarker.rotation.x = Math.PI / 2; // en el plano del reverso del modelo (xz)
+backMarker.visible = false;
+function placeBackMarker(index) {
+	const rows = parts.back?.userData.track_rows;
+	if (!rows) return;
+	const { x, z } = backRowCenter(index, rows);
+	backMarker.scale.set(rows.half * 2 + 0.08, rows.step * 0.9, 1);
+	backMarker.position.set(x, rows.y - 0.003, z); // justo por fuera del reverso
+	backMarker.visible = true;
+}
 let model = null;
 
 const loader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath("/draco/"));
@@ -135,6 +152,7 @@ loader.load("/models/currents.glb", (gltf) => {
 			obj.material.envMapIntensity = 1.0;
 		}
 		if (obj.name === "Body") parts.body = obj;
+		if (obj.name === "BackArt") parts.back = obj;
 		if (obj.name === "TitleBand" || obj.name === "TitleAlbum") parts[obj.name] = obj;
 		if (obj.name === "Stripes") {
 			parts.stripes = obj;
@@ -154,6 +172,8 @@ loader.load("/models/currents.glb", (gltf) => {
 			trailWaves(obj.material);
 		}
 	});
+	backMarker.material.clippingPlanes = clipPlanes;
+	model.add(backMarker);
 	floor.add(model);
 	modelStatus.textContent = "";
 }, undefined, () => {
@@ -180,6 +200,7 @@ const player = createPlayer(TRACKS);
 let started = false; // la estela solo se tiñe cuando ya ha sonado algo
 const viz = mountPanel(document, player, TRACKS, (state) => {
 	started ||= state.playing;
+	if (started) placeBackMarker(state.index);
 	trailUniforms.uTint.value.set(TRACKS[state.index].tint);
 	const duration = Number.isFinite(state.duration) ? state.duration : 0;
 	trailUniforms.uProgress.value = duration ? state.current / duration : 0;
@@ -203,12 +224,14 @@ window.addEventListener("keydown", (e) => {
 	if (k === "p") player.toggle();
 	if (k === "n") player.next();
 	if (k === "b") player.prev();
+	if (k === "m") player.toggleMute();
 	if (k === "escape" && !tracklist.hidden) setTracklist(false);
 });
 
 // Piezas clicables de la portada: la bola reproduce o pausa, CURRENTS abre el tracklist y
 // TAME IMPALA pasa al tema siguiente
-function activate(name) {
+function activate(name, index) {
+	if (name === "track") return player.play(index);
 	if (name === "ball") return player.toggle();
 	if (name === "TitleAlbum") return setTracklist(tracklist.hidden);
 	if (name === "TitleBand") return player.next();
@@ -225,6 +248,11 @@ function pickAt(clientX, clientY) {
 	raycaster.setFromCamera(pointerNdc, camera);
 	const hits = raycaster.intersectObjects([parts.ball, parts.body].filter(Boolean), false);
 	let best = hits[0] ? { name: hits[0].object === parts.ball ? "ball" : null, distance: hits[0].distance } : null;
+	if (hits[0]?.object === parts.body && hits[0].face.normal.y < -0.5) {
+		// el reverso del cuerpo: ¿qué fila del tracklist de la contraportada?
+		const index = backTrackAt(parts.body.worldToLocal(hitPoint.copy(hits[0].point)), parts.back?.userData.track_rows);
+		if (index >= 0) best = { name: "track", index, distance: hits[0].distance };
+	}
 	for (const name of ["TitleBand", "TitleAlbum"]) {
 		if (!parts[name]) continue;
 		pickBox.setFromObject(parts[name]).expandByScalar(0.03); // el texto es fino: caja algo mayor
@@ -236,7 +264,7 @@ function pickAt(clientX, clientY) {
 		model.worldToLocal(hitPoint.copy(hits[0].point));
 		waveUniforms.uPointer.value.copy(hitPoint); // la onda del ratón nace donde toca la superficie
 	}
-	return { name: best?.name ?? null, overCover: hits.length > 0 };
+	return { name: best?.name ?? null, index: best?.index, overCover: hits.length > 0 };
 }
 
 let pointerOverCover = false;
@@ -245,7 +273,7 @@ canvas.addEventListener("pointerdown", (e) => (downAt = { x: e.clientX, y: e.cli
 canvas.addEventListener("click", (e) => {
 	if (downAt && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 6) return; // era un arrastre
 	const hit = pickAt(e.clientX, e.clientY);
-	if (hit?.name) activate(hit.name);
+	if (hit?.name) activate(hit.name, hit.index);
 });
 canvas.addEventListener("pointermove", (e) => {
 	if (dragging) return;

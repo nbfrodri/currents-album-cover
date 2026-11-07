@@ -99,3 +99,18 @@ test("los datos del disco cuadran: 13 temas, 51:06 en total y formato m:ss", () 
 	assert.ok(TRACKS.every((t) => t.preview.startsWith("https://audio-ssl.itunes.apple.com/")));
 	assert.equal(formatTime(NaN), "0:00");
 });
+
+test("el volumen se limita a 0..1, se aplica al audio aunque se fije antes y se puede silenciar", async () => {
+	const { audio, player } = setup();
+	player.setVolume(1.7);
+	assert.equal(player.state().volume, 1);
+	player.setVolume(0.4);
+	await player.play(0);
+	assert.equal(audio.volume, 0.4);
+	player.toggleMute();
+	assert.equal(audio.muted, true);
+	assert.equal(player.state().muted, true);
+	player.setVolume(0.6); // mover el volumen quita el silencio
+	assert.equal(audio.muted, false);
+	assert.equal(audio.volume, 0.6);
+});
