@@ -53,8 +53,11 @@ DENT = 0.075  # profundidad del hoyo que hace la bola en la superficie (imagen)
 DENT_WIDTH = 0.11  # alcance del hoyo desde el centro de la bola (imagen)
 SINK = 0.45  # altura del centro de la bola sobre el fondo del hoyo, en radios
 TITLE_WIDTH = 0.255  # ancho de "TAME IMPALA" en la portada original (imagen)
-TITLE_LIFT = 0.07
-BACK_DEPTH = 0.1  # grosor del cuerpo del álbum bajo la superficie (imagen)  # el texto flota por delante de la superficie (imagen): capa propia para el parallax
+TITLE_LIFT = 0.07  # el texto flota por delante de la superficie (imagen): capa propia para el parallax
+# grosor del cuerpo del álbum bajo la superficie (imagen): la bola baja (1 - SINK) radios por debajo
+# del fondo de su hoyo, y el reverso queda un poco más abajo para que nunca lo atraviese
+BACK_DEPTH = DENT + BALL_R * (1 - SINK) + 0.015
+BACK_ROWS = {"top": 0.6, "step": 0.075, "half": 0.86}  # filas del tracklist del reverso (u, v)
 TRAIL_THIN = 0.0032  # medio ancho del hilo rojo (imagen)
 SMEAR = 0.2  # distancia antes de la bola en la que el hilo se abre en una mancha rosa (imagen)
 SMEAR_WIDTH = 0.026  # medio ancho de la mancha junto a la bola (imagen)
@@ -392,16 +395,16 @@ def build_back(size):
 	lilac = material("BackLilac", LILAC_NEAR, 0.0, 0.5, emission=0.6)
 	red = material("BackRed", RED, 0.0, 0.5, emission=0.8)
 
-	def at(u, v):
-		return (-u, v, z)
+	def at(u, v, dz=0.0):
+		return (-u, v, z - dz)
 
 	parts = [(add_text("TAME IMPALA", at(-0.93, 0.84), size, "LEFT", True), orange),
 		(add_text("CURRENTS", at(0.93, 0.84), size, "RIGHT", True), orange)]
 	for k, (title, time) in enumerate(TRACKS):
-		v = 0.6 - k * 0.075
-		parts.append((add_text(f"{k + 1:02d}", at(-0.86, v), size * 0.75, "LEFT", True), lilac))
+		v = BACK_ROWS["top"] - k * BACK_ROWS["step"]
+		parts.append((add_text(f"{k + 1:02d}", at(-BACK_ROWS["half"], v), size * 0.75, "LEFT", True), lilac))
 		parts.append((add_text(title.upper(), at(-0.7, v), size * 0.75, "LEFT", True), orange))
-		parts.append((add_text(time, at(0.86, v), size * 0.75, "RIGHT", True), lilac))
+		parts.append((add_text(time, at(BACK_ROWS["half"], v), size * 0.75, "RIGHT", True), lilac))
 
 	bm = bmesh.new()  # banda de rayas lila abajo, cruzada por el hilo rojo
 	for k in range(22):
@@ -410,7 +413,8 @@ def build_back(size):
 		bm.faces.new(quad)
 	stripes = finish_mesh("BackStripes", bm, lilac)
 	bm = bmesh.new()
-	line = [bm.verts.new(at(u, v)) for u, v in ((-1, -0.62), (1, -0.9), (1, -0.892), (-1, -0.612))]
+	# el hilo rojo, apenas por fuera de las rayas para que no se peleen en profundidad
+	line = [bm.verts.new(at(u, v, 0.001)) for u, v in ((-1, -0.62), (1, -0.9), (1, -0.892), (-1, -0.612))]
 	bm.faces.new(line)
 	thread = finish_mesh("BackThread", bm, red)
 	parts += [(stripes, lilac), (thread, red)]
@@ -425,6 +429,8 @@ def build_back(size):
 	bpy.ops.object.join()
 	back = bpy.context.active_object
 	back.name = back.data.name = "BackArt"
+	# la web hace clicables las filas: dónde están, en el espacio del modelo glTF (y = altura)
+	back["track_rows"] = {**BACK_ROWS, "count": len(TRACKS), "y": z}
 	bm = bmesh.new()  # todas las caras hacia -Z, para que el reverso se vea desde detrás
 	bm.from_mesh(back.data)
 	for f in bm.faces:
@@ -557,6 +563,7 @@ def export():
 		export_yup=True,
 		export_normals=True,
 		export_draco_mesh_compression_enable=True,
+		export_extras=True,
 	)
 	print("exported", OUT, os.path.getsize(OUT), "bytes")
 

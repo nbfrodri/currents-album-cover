@@ -14,7 +14,7 @@ import { addWaves, trailUniforms, trailWaves, waveUniforms } from "./waves.js";
 const MAX_TILT = { x: 0.35, y: 0.5 }; // radianes
 const COVER = 2; // la portada mide 2x2 (igual que en Blender)
 const FLOOR_DEPTH = 0.14; // la superficie queda dentro de la caja del marco; el relieve y el texto suben hasta su borde
-const ALBUM_DEPTH = 0.21; // grosor del cuerpo del álbum de Blender bajo la superficie, con la contraportada
+const ALBUM_DEPTH = 0.3; // grosor del cuerpo del álbum de Blender (2 · BACK_DEPTH), con la contraportada
 const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
 let reducedMotion = motionPreference.matches;
 motionPreference.addEventListener("change", (e) => { reducedMotion = e.matches; });
@@ -283,21 +283,14 @@ canvas.addEventListener("pointermove", (e) => {
 });
 canvas.addEventListener("pointerleave", () => (pointerOverCover = false));
 
-// Interacción: ratón, táctil y giroscopio
+// Inclinación de la portada (efecto carta): solo con el giroscopio del móvil. Con ratón, la
+// portada únicamente se mueve al arrastrar, para que no se escape al ir a hacer clic.
 const target = new THREE.Vector2(); // inclinación deseada, en [-1, 1]
 const tilt = new THREE.Vector2();
-let lastInput = -Infinity;
 
 function setTarget(nx, ny) {
 	target.set(THREE.MathUtils.clamp(nx, -1, 1), THREE.MathUtils.clamp(ny, -1, 1));
-	lastInput = performance.now();
 }
-
-// El hover inclina la portada (efecto carta); mientras se arrastra manda la cámara
-window.addEventListener("pointermove", (e) => {
-	if (dragging) return;
-	setTarget((e.clientX / window.innerWidth) * 2 - 1, (e.clientY / window.innerHeight) * 2 - 1);
-});
 
 // beta/gamma van en ejes del dispositivo en vertical: se giran según la orientación de la pantalla
 let neutral = null;
@@ -382,23 +375,20 @@ function adaptQuality() {
 	frames = -1;
 }
 
-const idleGoal = new THREE.Vector2();
 const clipNormalMatrix = new THREE.Matrix3();
 const startedAt = performance.now();
 renderer.setAnimationLoop(() => {
 	const t = (performance.now() - startedAt) / 1000;
 	adaptQuality();
 	controls.update();
-	const idle = !reducedMotion && !dragging && performance.now() - lastInput > 2500;
-	const goal = idle ? idleGoal.set(Math.sin(t * 0.5) * 0.35, Math.sin(t * 0.37) * 0.25) : target;
-	tilt.lerp(goal, idle ? 0.02 : 0.08);
+	tilt.lerp(target, 0.08);
 
 	cover.rotation.y = tilt.x * MAX_TILT.y;
 	cover.rotation.x = tilt.y * MAX_TILT.x;
 
 	ambient.setTilt(cover.rotation.y, cover.rotation.x);
 	glareUniforms.uPointer.value.set(0.5 + tilt.x * 0.5, 0.5 - tilt.y * 0.5);
-	glareUniforms.uStrength.value = THREE.MathUtils.lerp(glareUniforms.uStrength.value, idle ? 0.08 : 0.2, 0.05);
+	glareUniforms.uStrength.value = THREE.MathUtils.lerp(glareUniforms.uStrength.value, 0.15, 0.05);
 
 	cover.updateMatrixWorld();
 	clipNormalMatrix.getNormalMatrix(cover.matrixWorld);

@@ -164,14 +164,12 @@ test("los planos conservan el interior y recortan el exterior al inclinar", () =
 	assert.equal(app.run(`clipPlanes.some((plane) => plane.distanceToPoint(new THREE.Vector3(1.1, 0, 0).applyMatrix4(cover.matrixWorld)) < 0)`), true);
 });
 
-test("mientras se arrastra la cámara, el puntero no inclina la portada", () => {
+test("mover el ratón no inclina ni balancea la portada: solo se mueve al arrastrar", () => {
 	const app = setup();
-	app.run("controls.listeners.start()");
-	app.listeners.get("pointermove")({ clientX: 1200, clientY: 0 });
-	assert.equal(app.run("target.x"), 0);
-	app.run("controls.listeners.end()");
-	app.listeners.get("pointermove")({ clientX: 1200, clientY: 0 });
-	assert.equal(app.run("target.x"), 1);
+	assert.equal(app.listeners.has("pointermove"), false);
+	for (let i = 0; i < 120; i++) app.run("renderer.frame(16.67)"); // sin tocar nada: antes se balanceaba sola
+	assert.equal(app.run("cover.rotation.x"), 0);
+	assert.equal(app.run("cover.rotation.y"), 0);
 });
 
 test("el permiso de iOS no se duplica ni se vuelve a solicitar tras denegarlo", async () => {
@@ -190,14 +188,13 @@ test("el permiso de iOS no se duplica ni se vuelve a solicitar tras denegarlo", 
 	assert.equal(app.listeners.has("deviceorientation"), false);
 });
 
-test("el puntero inclina la portada y las lecturas inválidas del sensor se ignoran", () => {
+test("el giroscopio inclina la portada y las lecturas inválidas del sensor se ignoran", () => {
 	const app = setup();
-	app.listeners.get("pointermove")({ clientX: 1200, clientY: 0 });
+	app.run("onOrientation({ beta: 10, gamma: 0 })"); // reposo
+	app.run("onOrientation({ beta: 10, gamma: 25 })");
 	assert.equal(app.run("target.x"), 1);
-	assert.equal(app.run("target.y"), -1);
 	app.run("onOrientation({ beta: NaN, gamma: Infinity })");
 	assert.equal(app.run("target.x"), 1);
-	assert.equal(app.run("neutral"), null);
 	app.preference.change({ matches: false });
 	assert.equal(app.run("reducedMotion"), false);
 });
