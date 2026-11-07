@@ -6,6 +6,7 @@ import * as THREE from "three";
 import * as shaders from "../src/shaders.js";
 import * as tracks from "../src/tracks.js";
 import * as panel from "../src/panel.js";
+import * as sheet from "../src/sheet.js";
 import * as waves from "../src/waves.js";
 import * as beat from "../src/beat.js";
 import * as back from "../src/back.js";
@@ -68,7 +69,7 @@ function setup(orientation) {
 	const context = vm.createContext({
 		THREE: { ...THREE, WebGLRenderer: Renderer, TextureLoader: Loader }, ...shaders,
 		GLTFLoader: Loader, DRACOLoader: Loader, OrbitControls: Controls,
-		...tracks, ...panel, ...waves, ...beat, ...back, ...backdrop,
+		...tracks, ...panel, ...sheet, ...waves, ...beat, ...back, ...backdrop,
 		drawVisualizer() {},
 		createPlayer() {
 			let listener = null, playing = false, index = 0;
@@ -185,7 +186,7 @@ test("minimizar deja el reproductor en una barra y se puede volver a desplegar",
 	assert.equal(min["aria-expanded"], "true");
 });
 
-test("la bola reproduce, CURRENTS abre el tracklist y TAME IMPALA pasa de tema", async () => {
+test("la bola reproduce; los títulos TAME IMPALA y CURRENTS ya no hacen nada", async () => {
 	const app = setup();
 	const panel = app.elements.get("#tracklist");
 	panel.hidden = true;
@@ -193,12 +194,10 @@ test("la bola reproduce, CURRENTS abre el tracklist y TAME IMPALA pasa de tema",
 	assert.deepEqual(app.stats.player, ["toggle"]);
 	assert.equal(panel.hidden, false); // la bola abre el reproductor cerrado…
 	assert.equal(app.elements.get("#player-min")["aria-expanded"], "false"); // …minimizado
-	app.run("activate('TitleAlbum')"); // CURRENTS lo abre y lo cierra
-	assert.equal(panel.hidden, true);
-	app.run("activate('TitleAlbum')");
+	await app.run("activate('TitleAlbum'); activate('TitleBand')");
 	assert.equal(panel.hidden, false);
-	await app.run("activate('TitleBand')");
-	assert.deepEqual(app.stats.player, ["toggle", "next"]);
+	assert.deepEqual(app.stats.player, ["toggle"]);
+	assert.equal(app.run("'TitleBand' in parts || 'TitleAlbum' in parts"), false);
 });
 
 test("P, N y B controlan el reproductor; S ya no hace nada (sin sonido ambiente)", async () => {
@@ -208,6 +207,19 @@ test("P, N y B controlan el reproductor; S ya no hace nada (sin sonido ambiente)
 	await new Promise((resolve) => setTimeout(resolve));
 	assert.deepEqual(app.stats.player, ["toggle", "next", "prev"]);
 	assert.equal(app.elements.has("#sound"), false);
+});
+
+test("la ficha del álbum sigue al tema que suena y se puede recoger", async () => {
+	const app = setup();
+	assert.equal(app.elements.get("#sheet-total").textContent, "13 temas");
+	assert.equal(app.elements.get("#sheet-length").textContent, "51:06 de música");
+	await app.run("player.next()");
+	assert.equal(app.elements.get("#sheet-track").textContent, "Nangs");
+	assert.match(app.elements.get("#sheet-track-meta").textContent, /^Reproduciendo · 02 de 13$/);
+	const toggle = app.elements.get("#sheet-toggle");
+	toggle.click();
+	assert.ok(app.elements.get("#sheet").classes.has("collapsed"));
+	assert.equal(toggle["aria-expanded"], "false");
 });
 
 test("la cámara puede dar la vuelta completa para ver la contraportada", () => {

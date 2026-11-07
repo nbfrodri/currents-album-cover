@@ -18,17 +18,16 @@ Para probarlo en el móvil (misma red Wi‑Fi): `npx vite --host` y abrir la IP 
 
 | Acción | Efecto |
 |---|---|
-| Mover el ratón / inclinar el móvil | Inclina la portada (efecto carta) |
+| Inclinar el móvil | Inclina la portada (efecto carta) |
 | Arrastrar | Gira la cámara alrededor del álbum, también por detrás (contraportada con el tracklist) |
-| Rueda / pellizcar | Acerca y aleja |
+| Rueda / pellizcar | Acerca y aleja (sin alejarse más que la vista inicial) |
 | Clic derecho / dos dedos | Desplaza la vista |
-| Botón **Centrar** o tecla `R` | Vuelve a la vista inicial |
-| Botón **Tracklist** o tecla `T` | Muestra/oculta el reproductor (`Esc` lo cierra) |
+| Tecla `R` | Vuelve a la vista inicial |
+| Tecla `T` | Muestra/oculta el reproductor (la X o `Esc` lo recogen al nombre del álbum) |
 | Clic en la bola o tecla `P` | Reproduce o pausa el disco |
-| Clic en «TAME IMPALA» / tecla `N` · tecla `B` | Tema siguiente · tema anterior |
-| Clic en «CURRENTS» | Abre el reproductor |
+| Tecla `N` · tecla `B` | Tema siguiente · tema anterior |
+| Clic en un tema de la contraportada | Reproduce ese tema |
 | Pasar el ratón por la portada | Las rayas ondulan alrededor del puntero |
-| Sin interacción 2,5 s | Balanceo automático |
 
 ## Técnicas
 

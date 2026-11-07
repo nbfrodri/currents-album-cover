@@ -14,6 +14,32 @@
 			<span class="brand">Currents</span>
 		</header>
 
+		<aside id="sheet" class="sheet" aria-labelledby="sheet-title">
+			<div class="stripes" aria-hidden="true"></div>
+			<div class="sheet-body">
+				<header class="player-head">
+					<h2 id="sheet-title">Ficha del álbum</h2>
+					<button id="sheet-toggle" class="head-button" type="button" aria-expanded="true" aria-controls="sheet-content" aria-label="Recoger la ficha">
+						<svg class="icon-min" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8 H13" /></svg>
+						<svg class="icon-max" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3 H13 V13 H3 Z" /></svg>
+					</button>
+				</header>
+				<div id="sheet-content" class="sheet-content">
+					<ul class="facts">
+						<li><strong>2015</strong><span>Salió el 17 de julio</span></li>
+						<li><strong>Kevin Parker</strong><span>Lo compuso, grabó y produjo él solo</span></li>
+						<li><strong id="sheet-total"></strong><span id="sheet-length"></span></li>
+						<li><strong>Robert Beatty</strong><span>Autor de la portada</span></li>
+					</ul>
+					<section class="sheet-section" aria-live="polite">
+						<h3>Ahora</h3>
+						<p id="sheet-track" class="sheet-track">Pulsa la bola para empezar</p>
+						<p id="sheet-track-meta" class="sheet-meta"></p>
+					</section>
+				</div>
+			</div>
+		</aside>
+
 		<section id="tracklist" class="player" aria-labelledby="tracklist-title" hidden>
 			<div class="stripes" aria-hidden="true"></div>
 			<div class="player-body">
@@ -73,7 +99,6 @@
 				<dt>Arrastrar</dt><dd>Girar el álbum, también para ver la contraportada</dd>
 				<dt>Rueda · pellizcar</dt><dd>Acercar y alejar · clic derecho para desplazar</dd>
 				<dt>La bola</dt><dd>Reproducir o pausar</dd>
-				<dt>TAME IMPALA · CURRENTS</dt><dd>Tema siguiente · abrir el reproductor</dd>
 				<dt>Contraportada</dt><dd>Clic en un tema para escucharlo</dd>
 			</dl>
 			<p class="keys"><kbd>P</kbd> pausa <kbd>N</kbd> <kbd>B</kbd> siguiente / anterior <kbd>M</kbd> silencio <kbd>T</kbd> reproductor <kbd>R</kbd> centrar <kbd>?</kbd> esta ayuda <kbd>Esc</kbd> cerrar</p>

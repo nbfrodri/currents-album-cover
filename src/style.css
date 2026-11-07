@@ -561,6 +561,132 @@ input:focus-visible {
 	border: 1px solid var(--line);
 }
 
+/* Ficha del álbum: a la izquierda, como el reproductor a la derecha */
+.sheet {
+	position: fixed;
+	top: 80px;
+	left: 24px;
+	width: min(280px, calc(100% - 48px));
+	max-height: calc(100% - 170px);
+	display: flex;
+	flex-direction: column;
+	background: var(--panel);
+	border: 1px solid var(--line);
+	backdrop-filter: blur(12px);
+}
+
+.sheet-body {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	padding: 18px 18px 16px;
+	min-height: 0;
+}
+
+.sheet h2 {
+	flex: 1;
+	font-size: 0.68rem;
+	font-weight: 700;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	color: var(--gold);
+}
+
+.sheet-content {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	overflow-y: auto;
+}
+
+.facts {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	padding: 0;
+	list-style: none;
+}
+
+.facts li {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.facts strong {
+	font-size: 0.95rem;
+	font-weight: 700;
+	color: var(--text);
+}
+
+.facts span {
+	font-size: 0.66rem;
+	letter-spacing: 0.04em;
+	color: var(--muted);
+}
+
+.sheet-section h3 {
+	font-size: 0.58rem;
+	font-weight: 700;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.sheet-section {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding-top: 14px;
+	border-top: 1px solid var(--line);
+	font-size: 0.66rem;
+	line-height: 1.55;
+	color: var(--text);
+}
+
+.sheet-track {
+	font-size: 0.8rem;
+	font-weight: 700;
+	color: var(--gold);
+}
+
+.sheet-meta {
+	font-size: 0.6rem;
+	letter-spacing: 0.06em;
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.sheet-meta:empty {
+	display: none;
+}
+
+.sheet .head-button .icon-max,
+.sheet.collapsed .head-button .icon-min,
+.sheet.collapsed .stripes,
+.sheet.collapsed .sheet-content {
+	display: none;
+}
+
+.sheet.collapsed .head-button .icon-max {
+	display: block;
+}
+
+.sheet.collapsed {
+	width: auto;
+}
+
+.sheet.collapsed .sheet-body {
+	padding: 12px 18px;
+}
+
+/* Solo cuando hay sitio a los lados de la portada */
+@media (max-width: 1099px) {
+	.sheet {
+		display: none;
+	}
+}
+
 /* Móvil: el reproductor es una hoja inferior y la marca se esconde para dejar sitio */
 @media (max-width: 600px) {
 	.hud {

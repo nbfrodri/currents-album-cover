@@ -7,6 +7,7 @@ import { createBackdrop } from "./backdrop.js";
 import { backRowCenter, backTrackAt } from "./back.js";
 import { createBeat } from "./beat.js";
 import { mountPanel } from "./panel.js";
+import { mountSheet } from "./sheet.js";
 import { glareShader } from "./shaders.js";
 import { TRACKS } from "./tracks.js";
 import { drawVisualizer } from "./visualizer.js";
@@ -121,7 +122,7 @@ ballEnv.mapping = THREE.EquirectangularReflectionMapping;
 ballEnv.colorSpace = THREE.SRGBColorSpace;
 
 // Piezas de Blender con interacción
-const parts = { ball: null, body: null, back: null, stripes: null, trail: null, TitleBand: null, TitleAlbum: null };
+const parts = { ball: null, body: null, back: null, stripes: null, trail: null };
 
 // Franja dorada sobre el tema que suena en el tracklist de la contraportada
 const backMarker = new THREE.Mesh(
@@ -167,7 +168,6 @@ loader.load("models/currents.glb", (gltf) => {
 			obj.material.envMapIntensity = 1.0;
 		}
 		if (obj.name === "Body") parts.body = obj;
-		if (obj.name === "TitleBand" || obj.name === "TitleAlbum") parts[obj.name] = obj;
 		if (obj.name === "Stripes") {
 			parts.stripes = obj;
 			addWaves(obj.material);
@@ -200,7 +200,9 @@ loader.load("models/currents.glb", (gltf) => {
 // Reproductor y tracklist
 const player = createPlayer(TRACKS);
 let started = false; // la franja de la contraportada aparece cuando ya ha sonado algo
+const sheet = mountSheet(document, TRACKS);
 const panel = mountPanel(document, player, TRACKS, (state) => {
+	sheet.update(state);
 	started ||= state.playing;
 	if (started) placeBackMarker(state.index);
 });
@@ -221,21 +223,17 @@ window.addEventListener("keydown", (e) => {
 	if (k === "escape" && !tracklist.hidden) panel.collapse();
 });
 
-// Piezas clicables de la portada: la bola reproduce o pausa, CURRENTS abre el tracklist y
-// TAME IMPALA pasa al tema siguiente
+// Piezas clicables de la portada: la bola reproduce o pausa y cada tema de la contraportada suena
 function activate(name, index) {
 	if (name === "track") return player.play(index);
 	if (name === "ball") {
 		panel.reveal();
 		return player.toggle();
 	}
-	if (name === "TitleAlbum") return setTracklist(tracklist.hidden);
-	if (name === "TitleBand") return player.next();
 }
 
 const raycaster = new THREE.Raycaster();
 const pointerNdc = new THREE.Vector2();
-const pickBox = new THREE.Box3();
 const hitPoint = new THREE.Vector3();
 // Lo primero que toca el rayo; el cuerpo del álbum tapa lo que hay detrás (p. ej. vista desde atrás)
 function pickAt(clientX, clientY) {
@@ -248,13 +246,6 @@ function pickAt(clientX, clientY) {
 		// el reverso del cuerpo: ¿qué fila del tracklist de la contraportada?
 		const index = backTrackAt(parts.body.worldToLocal(hitPoint.copy(hits[0].point)), parts.back?.userData.track_rows);
 		if (index >= 0) best = { name: "track", index, distance: hits[0].distance };
-	}
-	for (const name of ["TitleBand", "TitleAlbum"]) {
-		if (!parts[name]) continue;
-		pickBox.setFromObject(parts[name]).expandByScalar(0.03); // el texto es fino: caja algo mayor
-		if (!raycaster.ray.intersectBox(pickBox, hitPoint)) continue;
-		const distance = hitPoint.distanceTo(raycaster.ray.origin);
-		if (!best || distance < best.distance) best = { name, distance };
 	}
 	const front = hits[0] && hits[0].object === parts.body && hits[0].face.normal.y > 0.5;
 	if (front) {
