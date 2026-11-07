@@ -63,6 +63,9 @@ const WAVE_VERTEX = `
 `;
 
 export function addWaves(material, extra = {}) {
+	// clave propia: si no, three reutiliza el mismo programa para todos los materiales con este
+	// onBeforeCompile y las rayas acaban con el shader (y el tinte) de la estela
+	material.customProgramCacheKey = () => extra.key ?? "waves";
 	material.onBeforeCompile = (shader) => {
 		Object.assign(shader.uniforms, waveUniforms, extra.uniforms);
 		shader.vertexShader = shader.vertexShader
@@ -75,6 +78,7 @@ export function addWaves(material, extra = {}) {
 // La estela: el tema que suena la tiñe, y una cabeza brillante la recorre según el progreso
 export function trailWaves(material) {
 	addWaves(material, {
+		key: "trail-waves",
 		uniforms: trailUniforms,
 		vertexHead: "varying float vAlong;",
 		vertexBody: "vAlong = uv.x;",

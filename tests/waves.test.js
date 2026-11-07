@@ -17,3 +17,13 @@ test("el rastro del puntero guarda puntos separados y recicla los más antiguos"
 	assert.equal(newest.y, 1 + (TRAIL_POINTS + 3) * 0.05); // momento en que nació
 });
 
+
+test("las rayas y la estela no comparten programa: las rayas nunca se tiñen con el tema", async () => {
+	const THREE = await import("three");
+	const { addWaves, trailWaves } = await import("../src/waves.js");
+	const stripes = new THREE.MeshStandardMaterial();
+	const trail = new THREE.MeshStandardMaterial();
+	addWaves(stripes);
+	trailWaves(trail);
+	assert.notEqual(stripes.customProgramCacheKey(), trail.customProgramCacheKey());
+});
