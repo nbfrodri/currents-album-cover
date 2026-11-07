@@ -140,10 +140,10 @@ function placeBackMarker(index) {
 }
 let model = null;
 
-// Pantalla de carga: animación de la bola y la estela mientras llega el modelo; se va cuando
-// el modelo está listo y ha pasado un mínimo, y entonces la portada entra girando
-const LOADER_MIN = 1.4; // segundos: que la animación de carga se llegue a ver
-const INTRO = 2.2; // segundos que dura la entrada de la portada
+// Pantalla de carga: las líneas llegan a la bola y la estela se despliega antes del fundido.
+// La portada toma el relevo con un giro suave; con movimiento reducido no se fuerza la espera.
+const LOADER_MIN = 2.4; // segundos para completar el dibujo, incluso con el modelo en caché
+const INTRO = 3.2; // segundos de giro pausado, después de los primeros 0,2 s del fundido
 const loadingScreen = document.querySelector("#loader");
 const loadingLabel = document.querySelector("#loader-label");
 const loadingFill = document.querySelector("#loader-fill");
@@ -380,14 +380,14 @@ renderer.setAnimationLoop(() => {
 	tilt.lerp(target, 0.08);
 
 	// entrada: cuando el modelo está listo, la portada llega girando desde la contraportada
-	if (introAt === null && model && t > LOADER_MIN) {
+	if (introAt === null && model && (reducedMotion || t >= LOADER_MIN)) {
 		introAt = t;
 		loadingScreen.classList.toggle("done", true);
 	}
-	const intro = introAt === null || reducedMotion ? 1 : Math.min((t - introAt) / INTRO, 1);
-	const ease = 1 - (1 - intro) ** 3;
-	cover.scale.setScalar(0.6 + 0.4 * ease);
-	cover.rotation.y = tilt.x * MAX_TILT.y - (1 - ease) * Math.PI * 0.9;
+	const intro = introAt === null || reducedMotion ? 1 : Math.max(0, Math.min((t - introAt - 0.2) / INTRO, 1));
+	const ease = intro * intro * (3 - 2 * intro); // arranque y llegada sin aceleraciones bruscas
+	cover.scale.setScalar(0.82 + 0.18 * ease);
+	cover.rotation.y = tilt.x * MAX_TILT.y - (1 - ease) * Math.PI * 0.55;
 	cover.rotation.x = tilt.y * MAX_TILT.x;
 
 	glareUniforms.uPointer.value.set(0.5 + tilt.x * 0.5, 0.5 - tilt.y * 0.5);

@@ -84,13 +84,39 @@
 		</button>
 
 		<div id="loader" class="loader" role="status" aria-live="polite">
-			<div class="loader-art" aria-hidden="true">
-				<span class="loader-stripes"></span>
-				<span class="loader-trail"></span>
-				<span class="loader-ball"></span>
+			<div class="loader-panel">
+				<svg class="loader-art" viewBox="0 0 320 320" aria-hidden="true" focusable="false">
+					<defs>
+						<pattern id="loader-lines" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(-42)">
+							<path d="M0 0V7" stroke="#c9aef2" stroke-width="1" />
+						</pattern>
+						<linearGradient id="loader-warm" x1="0" y1="0" x2="0.4" y2="1">
+							<stop stop-color="#e8233a" /><stop offset=".4" stop-color="#ff4d8c" />
+							<stop offset=".78" stop-color="#ff8c1a" /><stop offset="1" stop-color="#ffd23f" />
+						</linearGradient>
+						<radialGradient id="loader-chrome" cx=".32" cy=".24" r=".8">
+							<stop stop-color="#fff" /><stop offset=".16" stop-color="#e5e4ed" />
+							<stop offset=".38" stop-color="#9895a5" /><stop offset=".54" stop-color="#262432" />
+							<stop offset=".7" stop-color="#bcb9c8" /><stop offset="1" stop-color="#18141f" />
+						</radialGradient>
+						<radialGradient id="loader-well">
+							<stop offset=".5" stop-color="#07030b" /><stop offset="1" stop-color="#07030b" stop-opacity="0" />
+						</radialGradient>
+					</defs>
+					<rect class="loader-stripes" x="0" y="42" width="320" height="278" fill="url(#loader-lines)" />
+					<ellipse cx="207" cy="164" rx="66" ry="62" fill="url(#loader-well)" />
+					<path class="loader-signal" d="M0 0L207 150" fill="none" stroke="#e8233a" stroke-width="1.5" pathLength="1" />
+					<g class="loader-trail" fill="none" stroke="url(#loader-warm)" stroke-width="2" stroke-linecap="round">
+						<path d="M207 156C202 191 251 199 233 228S177 256 211 282 249 311 229 334" pathLength="1" />
+						<path d="M213 156C208 191 260 200 242 230S186 257 220 283 258 312 238 334" pathLength="1" />
+						<path d="M219 156C214 191 269 201 251 232S195 258 229 284 267 313 247 334" pathLength="1" />
+						<path d="M225 156C220 191 278 202 260 234S204 259 238 285 276 314 256 334" pathLength="1" />
+					</g>
+					<circle class="loader-ball" cx="211" cy="151" r="27" fill="url(#loader-chrome)" stroke="#e6dcf5" stroke-opacity=".3" stroke-width=".6" />
+				</svg>
+				<p class="loader-title"><span>Tame Impala</span><span>Currents</span></p>
 			</div>
-			<p class="loader-title">Tame Impala · Currents</p>
-			<p id="loader-label" class="loader-label">Cargando portada</p>
+			<p id="loader-label" class="loader-label">Cargando portada en 3D</p>
 			<div class="loader-bar" aria-hidden="true"><span id="loader-fill"></span></div>
 		</div>
 		<script type="module" src="/src/main.js"></script>
