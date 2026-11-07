@@ -65,8 +65,8 @@ export function mountPanel(doc, player, tracks, onState) {
 	const minButton = $("#player-min");
 
 	const setOpen = (open) => (panel.hidden = !open);
-	// "full", "minimized" (una barra con el tema y el progreso) o "collapsed" (solo el nombre del
-	// álbum y el botón de maximizar)
+	// "full", "minimized" (una barra con el tema y el progreso) o "collapsed" (el nombre del
+	// álbum, el botón de maximizar y las rayas del visualizador)
 	let view = "full";
 	function setView(value) {
 		view = value;

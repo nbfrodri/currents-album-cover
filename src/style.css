@@ -171,21 +171,20 @@ input:focus-visible {
 	display: block;
 }
 
-/* Recogido con la X: solo el nombre del álbum y el botón de maximizar */
+/* Recogido con la X: el nombre del álbum, el botón de maximizar y las rayas del visualizador */
 .player.collapsed {
 	width: auto;
 }
 
 .player.collapsed .stripes,
-.player.collapsed .player-body > :not(.player-head),
-.player.collapsed #viz,
+.player.collapsed .player-body > :not(.player-head, #viz),
 .player.collapsed #album-total,
 .player.collapsed #player-close {
 	display: none;
 }
 
 .player.collapsed .player-body {
-	padding: 12px 18px;
+	padding: 12px 18px 14px;
 }
 
 .player.collapsed .head-button .icon-min {
