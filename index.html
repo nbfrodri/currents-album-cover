@@ -4,39 +4,62 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Currents — portada 3D</title>
+		<link rel="preload" href="/fonts/ArchivoExpanded-Bold.woff2" as="font" type="font/woff2" crossorigin />
 		<link rel="stylesheet" href="/src/style.css" />
 	</head>
 	<body>
-		<canvas id="scene" role="img" aria-label="Portada 3D de Currents: rayas lila alrededor de una bola cromada y una estela multicolor."></canvas>
-		<nav class="controls" aria-label="Controles de la portada">
-			<button id="tracklist-toggle" type="button" aria-expanded="false" aria-controls="tracklist" aria-keyshortcuts="T" title="Mostrar la lista de canciones (tecla T)">Tracklist <kbd aria-hidden="true">T</kbd></button>
-			<button id="reset" type="button" aria-keyshortcuts="R" title="Volver a la vista inicial (tecla R)">Centrar <kbd aria-hidden="true">R</kbd></button>
-			<button id="sound" type="button" aria-pressed="false" aria-keyshortcuts="S" title="Activar sonido (tecla S)">Sonido <kbd aria-hidden="true">S</kbd></button>
-		</nav>
-		<section id="tracklist" class="tracklist" aria-labelledby="tracklist-title" hidden>
-			<header>
-				<h2 id="tracklist-title">Currents · 2015</h2>
-				<span>13 temas · 51:06</span>
-			</header>
-			<ol>
-				<li><span class="n">01</span><span>Let It Happen</span><time datetime="PT7M47S">7:47</time></li>
-				<li><span class="n">02</span><span>Nangs</span><time datetime="PT1M47S">1:47</time></li>
-				<li><span class="n">03</span><span>The Moment</span><time datetime="PT4M15S">4:15</time></li>
-				<li><span class="n">04</span><span>Yes I’m Changing</span><time datetime="PT4M30S">4:30</time></li>
-				<li><span class="n">05</span><span>Eventually</span><time datetime="PT5M19S">5:19</time></li>
-				<li><span class="n">06</span><span>Gossip</span><time datetime="PT0M55S">0:55</time></li>
-				<li><span class="n">07</span><span>The Less I Know the Better</span><time datetime="PT3M36S">3:36</time></li>
-				<li><span class="n">08</span><span>Past Life</span><time datetime="PT3M48S">3:48</time></li>
-				<li><span class="n">09</span><span>Disciples</span><time datetime="PT1M48S">1:48</time></li>
-				<li><span class="n">10</span><span>’Cause I’m a Man</span><time datetime="PT4M1S">4:01</time></li>
-				<li><span class="n">11</span><span>Reality in Motion</span><time datetime="PT4M12S">4:12</time></li>
-				<li><span class="n">12</span><span>Love/Paranoia</span><time datetime="PT3M5S">3:05</time></li>
-				<li><span class="n">13</span><span>New Person, Same Old Mistakes</span><time datetime="PT6M3S">6:03</time></li>
-			</ol>
+		<canvas id="scene" role="img" aria-label="Portada 3D de Currents: rayas lila alrededor de una bola cromada y una estela multicolor. Por detrás, la contraportada con el tracklist."></canvas>
+		<header class="hud">
+			<span class="brand">Tame Impala</span>
+			<nav class="controls" aria-label="Controles de la portada">
+				<button id="tracklist-toggle" type="button" aria-expanded="false" aria-controls="tracklist" aria-keyshortcuts="T" title="Mostrar el reproductor y el tracklist (tecla T)">Tracklist <kbd aria-hidden="true">T</kbd></button>
+				<button id="reset" type="button" aria-keyshortcuts="R" title="Volver a la vista inicial (tecla R)">Centrar <kbd aria-hidden="true">R</kbd></button>
+				<button id="sound" type="button" aria-pressed="false" aria-keyshortcuts="S" title="Activar el sonido ambiente (tecla S)">Ambiente <kbd aria-hidden="true">S</kbd></button>
+			</nav>
+			<span class="brand">Currents</span>
+		</header>
+
+		<section id="tracklist" class="player" aria-labelledby="tracklist-title" hidden>
+			<div class="stripes" aria-hidden="true"></div>
+			<div class="player-body">
+				<header class="player-head">
+					<h2 id="tracklist-title">Currents · 2015</h2>
+					<span id="album-total"></span>
+				</header>
+
+				<div class="now">
+					<button id="play" class="chrome" type="button" aria-label="Reproducir" aria-keyshortcuts="P">
+						<svg class="icon-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2 L14 8 L4 14 Z" /></svg>
+						<svg class="icon-pause" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" /><rect x="9.5" y="2" width="3.5" height="12" /></svg>
+					</button>
+					<div class="now-text">
+						<p id="now-label">Pulsa la bola o un tema</p>
+						<p id="now-title">Currents</p>
+					</div>
+					<button id="prev" class="step" type="button" aria-label="Tema anterior" aria-keyshortcuts="B">
+						<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 2 L5 8 L13 14 Z M3 2 V14" /></svg>
+					</button>
+					<button id="next" class="step" type="button" aria-label="Tema siguiente" aria-keyshortcuts="N">
+						<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2 L11 8 L3 14 Z M13 2 V14" /></svg>
+					</button>
+				</div>
+
+				<canvas id="viz" width="324" height="64" role="img" aria-label="Visualizador: rayas lila que ondulan con la música"></canvas>
+
+				<div class="seek">
+					<label for="seek" class="visually-hidden">Posición del tema</label>
+					<input id="seek" type="range" min="0" max="0" step="0.1" value="0" />
+					<div class="times"><span id="time-current">0:00</span><span id="time-total">0:00</span></div>
+				</div>
+
+				<ol id="tracks" class="tracks"></ol>
+				<p id="audio-source" class="note" role="status"></p>
+			</div>
 		</section>
+
 		<footer class="caption">
-			<span class="title">Tame Impala — <em>Currents</em></span>
-			<span class="hint">Arrastra para girar · rueda o pellizca para acercar · clic derecho para desplazar</span>
+			<span class="title">Tame Impala — Currents</span>
+			<span class="hint">Arrastra para girar (también por detrás) · rueda para acercar · toca la bola para reproducir</span>
 			<span id="model-status" role="status">Cargando portada…</span>
 			<span id="sound-status" role="status"></span>
 		</footer>

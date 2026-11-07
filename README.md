@@ -17,12 +17,16 @@ Para probarlo en el móvil (misma red Wi‑Fi): `npx vite --host` y abrir la IP 
 | Acción | Efecto |
 |---|---|
 | Mover el ratón / inclinar el móvil | Inclina la portada (efecto carta) |
-| Arrastrar | Gira la cámara alrededor de la portada |
+| Arrastrar | Gira la cámara alrededor del álbum, también por detrás (contraportada con el tracklist) |
 | Rueda / pellizcar | Acerca y aleja |
 | Clic derecho / dos dedos | Desplaza la vista |
 | Botón **Centrar** o tecla `R` | Vuelve a la vista inicial |
-| Botón **Sonido** o tecla `S` | Activa/desactiva la banda sonora ambiental |
-| Botón **Tracklist** o tecla `T` | Muestra/oculta la lista de canciones (`Esc` la cierra) |
+| Botón **Ambiente** o tecla `S` | Activa/desactiva la banda sonora ambiental procedural |
+| Botón **Tracklist** o tecla `T` | Muestra/oculta el reproductor (`Esc` lo cierra) |
+| Clic en la bola o tecla `P` | Reproduce o pausa el disco |
+| Clic en «TAME IMPALA» / tecla `N` · tecla `B` | Tema siguiente · tema anterior |
+| Clic en «CURRENTS» | Abre el reproductor |
+| Pasar el ratón por la portada | Las rayas ondulan alrededor del puntero |
 | Sin interacción 2,5 s | Balanceo automático |
 
 ## Técnicas
@@ -37,6 +41,8 @@ Para probarlo en el móvil (misma red Wi‑Fi): `npx vite --host` y abrir la IP 
 - **Marco como ventana**: el marco es hueco, con grosor y bisel (`ExtrudeGeometry`), y la escena queda dentro, recortada con planos de corte.
 - **Cámara libre** (`OrbitControls`): girar, acercar y desplazar, con límites para no ver la portada por detrás.
 - **Efecto carta**: el puntero (o el giroscopio) inclina la portada y un brillo especular le sigue.
+- **Reproductor** (`src/player.js`, `src/tracks.js`): un `<audio>` que prueba primero `public/audio/NN.mp3` (tu copia del disco, fuera de git) y, si no está, el preview oficial de 30 s de Apple. Un `AnalyserNode` alimenta el visualizador del panel (`src/visualizer.js`, rayas lila que ondulan) y la portada: las crestas de las ondas suben con los graves, la bola late y la estela se tiñe con el color del tema y una cabeza brillante la recorre según el progreso. Al sonar el disco se apaga el ambiente.
+- **HUD** con el estilo de la portada: Archivo Expanded (OFL, en `public/fonts/`), amarillo anaranjado y lila sobre negro, el botón de play como la bola cromada y la barra de progreso con los colores de la estela.
 - **Banda sonora procedural** (`src/audio.js`, Web Audio API, sin archivos de audio): pad de osciladores desafinados, filtro paso bajo modulado y eco. La inclinación controla el corte del filtro y el panorama estéreo.
 
 ## Rendimiento y accesibilidad
@@ -44,7 +50,7 @@ Para probarlo en el móvil (misma red Wi‑Fi): `npx vite --host` y abrir la IP 
 - Modelo comprimido con **Draco** (~300 KB); decodificador local en `public/draco/`.
 - Si los primeros 2 s van por debajo de 45 fps, baja la resolución interna.
 - Respeta `prefers-reduced-motion`: sin balanceo automático; también responde a cambios de la preferencia con la página abierta.
-- Controles accesibles por teclado (`S`, `R`, `T`, foco visible) y con `aria-pressed`; los atajos respetan los modificadores y los campos de texto.
+- Controles accesibles por teclado (`S`, `R`, `T`, `P`, `N`, `B`, foco visible) y con `aria-pressed`; los atajos respetan los modificadores y los campos de texto.
 - El giroscopio necesita un navegador compatible y un contexto seguro (HTTPS o localhost). En iOS, toca la página para solicitar permiso; una IP de la red local por HTTP permite probar el puntero, pero no garantiza acceso al sensor.
 
 ## Verificación

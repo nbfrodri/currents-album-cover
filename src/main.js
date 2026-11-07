@@ -3,11 +3,15 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { createAmbient } from "./audio.js";
+import { createPlayer } from "./player.js";
 import { glareShader } from "./shaders.js";
+import { TRACKS, formatTime, seconds } from "./tracks.js";
+import { drawVisualizer } from "./visualizer.js";
 
 const MAX_TILT = { x: 0.35, y: 0.5 }; // radianes
 const COVER = 2; // la portada mide 2x2 (igual que en Blender)
 const FLOOR_DEPTH = 0.14; // la superficie queda dentro de la caja del marco; el relieve y el texto suben hasta su borde
+const ALBUM_DEPTH = 0.21; // grosor del cuerpo del álbum de Blender bajo la superficie, con la contraportada
 const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
 let reducedMotion = motionPreference.matches;
 motionPreference.addEventListener("change", (e) => { reducedMotion = e.matches; });
@@ -25,9 +29,7 @@ const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 50);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
-controls.rotateSpeed = 0.45;
-controls.minAzimuthAngle = -1.4; // sin llegar a ver la portada por detrás
-controls.maxAzimuthAngle = 1.4;
+controls.rotateSpeed = 0.45; // sin límite horizontal: se puede dar la vuelta para ver la contraportada
 controls.minPolarAngle = 0.17;
 controls.maxPolarAngle = Math.PI - 0.17;
 let dragging = false;
@@ -38,6 +40,9 @@ scene.add(new THREE.HemisphereLight(0xd8c8ff, 0x1a0820, 1.2));
 const key = new THREE.DirectionalLight(0xfff0f8, 1.5);
 key.position.set(-2, 3, 4); // luz desde arriba a la izquierda, como en la portada
 scene.add(key);
+const backLight = new THREE.DirectionalLight(0xe8dcff, 0.8); // la contraportada también se ve
+backLight.position.set(1, 2, -4);
+scene.add(backLight);
 
 // Portada: marco, modelo de Blender (rayas, estela, bola, fondo y texto) y brillo
 const cover = new THREE.Group();
@@ -63,7 +68,7 @@ const frameShape = roundedRect(COVER + 0.12, 0.06);
 frameShape.holes.push(roundedRect(COVER, 0.001));
 const frame = new THREE.Mesh(
 	new THREE.ExtrudeGeometry(frameShape, {
-		depth: 0.12,
+		depth: FLOOR_DEPTH + ALBUM_DEPTH - 0.02,
 		bevelEnabled: true,
 		bevelThickness: 0.015,
 		bevelSize: 0.015,
@@ -71,7 +76,7 @@ const frame = new THREE.Mesh(
 	}),
 	new THREE.MeshStandardMaterial({ color: 0x1c0d26, metalness: 0.3, roughness: 0.45 }),
 );
-frame.position.z = -0.14; // cara frontal (con bisel) justo detrás de la superficie
+frame.position.z = -FLOOR_DEPTH - ALBUM_DEPTH; // cubre los cantos del álbum, de la contraportada a la superficie
 cover.add(frame);
 
 // La portada es una ventana: la escena 3D queda detrás y estos planos (en el espacio de la
@@ -109,21 +114,93 @@ const ballEnv = new THREE.TextureLoader().load("/models/ball_env.jpg");
 ballEnv.mapping = THREE.EquirectangularReflectionMapping;
 ballEnv.colorSpace = THREE.SRGBColorSpace;
 
-let ball = null;
+// Piezas de Blender con interacción
+const parts = { ball: null, body: null, stripes: null, trail: null, TitleBand: null, TitleAlbum: null };
+let model = null;
+
+// Uniformes compartidos por los shaders inyectados: ondas al pasar el ratón, pulso con los graves
+// y la estela que se tiñe con el tema y avanza con su progreso
+const waveUniforms = {
+	uTime: { value: 0 },
+	uPointer: { value: new THREE.Vector3(9, 0, 9) }, // en el espacio del modelo
+	uHover: { value: 0 },
+	uBass: { value: 0 },
+};
+const trailUniforms = {
+	uTint: { value: new THREE.Color(TRACKS[0].tint) },
+	uProgress: { value: 0 },
+	uActive: { value: 0 },
+	uRange: { value: new THREE.Vector2(0, 1) },
+};
+
+// Desplazamiento en altura (y del modelo): onda alrededor del puntero y las crestas suben con los graves
+const WAVE_VERTEX = `
+	float lifted = max(transformed.y, 0.0);
+	transformed.y += lifted * uBass * 1.4;
+	float d = distance(transformed.xz, uPointer.xz);
+	transformed.y += uHover * 0.022 * sin(d * 55.0 - uTime * 7.0) * exp(-d * d * 28.0);
+`;
+
+function addWaves(material, extra = {}) {
+	material.onBeforeCompile = (shader) => {
+		Object.assign(shader.uniforms, waveUniforms, extra.uniforms);
+		shader.vertexShader = shader.vertexShader
+			.replace("#include <common>", `#include <common>\nuniform float uTime, uHover, uBass;\nuniform vec3 uPointer;\n${extra.vertexHead ?? ""}`)
+			.replace("#include <begin_vertex>", `#include <begin_vertex>\n${WAVE_VERTEX}\n${extra.vertexBody ?? ""}`);
+		if (extra.fragment) extra.fragment(shader);
+	};
+}
+
+// La estela: el tema que suena la tiñe, y una cabeza brillante la recorre según el progreso
+function trailWaves(material) {
+	addWaves(material, {
+		uniforms: trailUniforms,
+		vertexHead: "varying float vAlong;",
+		vertexBody: "vAlong = uv.x;",
+		fragment(shader) {
+			shader.fragmentShader = shader.fragmentShader
+				.replace("#include <common>", "#include <common>\nuniform vec3 uTint;\nuniform float uProgress, uActive;\nuniform vec2 uRange;\nvarying float vAlong;")
+				.replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, uTint, 0.45 * uActive);")
+				.replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+	float head = mix(uRange.x, uRange.y, uProgress);
+	float glow = exp(-pow((vAlong - head) * 16.0, 2.0));
+	totalEmissiveRadiance += uActive * (uTint * glow * 2.5 + diffuseColor.rgb * step(vAlong, head) * 0.3);`);
+		},
+	});
+}
 
 const loader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath("/draco/"));
 const modelStatus = document.querySelector("#model-status");
 loader.load("/models/currents.glb", (gltf) => {
-	const model = gltf.scene;
+	model = gltf.scene;
 	model.rotation.x = Math.PI / 2; // Blender exporta en Y-up; la portada mira a +Z
 	model.traverse((obj) => {
 		if (!obj.isMesh) return;
-		// materiales y colores vienen de Blender; aquí solo se recortan al marco
+		// materiales y colores vienen de Blender; aquí solo se recortan al marco y se animan
 		obj.material.clippingPlanes = clipPlanes;
 		if (obj.name === "Ball") {
-			ball = obj;
+			parts.ball = obj;
 			obj.material.envMap = ballEnv;
 			obj.material.envMapIntensity = 1.0;
+		}
+		if (obj.name === "Body") parts.body = obj;
+		if (obj.name === "TitleBand" || obj.name === "TitleAlbum") parts[obj.name] = obj;
+		if (obj.name === "Stripes") {
+			parts.stripes = obj;
+			obj.material.emissive.set(0xc9aef2);
+			obj.material.emissiveIntensity = 0;
+			addWaves(obj.material);
+		}
+		if (obj.name === "Trail") {
+			parts.trail = obj;
+			const along = obj.geometry.attributes.uv;
+			let min = Infinity, max = -Infinity;
+			for (let i = 0; i < along.count; i++) {
+				min = Math.min(min, along.getX(i));
+				max = Math.max(max, along.getX(i));
+			}
+			trailUniforms.uRange.value.set(min, max);
+			trailWaves(obj.material);
 		}
 	});
 	floor.add(model);
@@ -137,6 +214,7 @@ const soundButton = document.querySelector("#sound");
 const soundStatus = document.querySelector("#sound-status");
 async function toggleSound() {
 	try {
+		if (!ambient.playing) player.pause(); // el ambiente y el disco no suenan a la vez
 		soundButton.setAttribute("aria-pressed", String(await ambient.toggle()));
 		soundStatus.textContent = "";
 	} catch {
@@ -145,6 +223,70 @@ async function toggleSound() {
 	}
 }
 soundButton.addEventListener("click", toggleSound);
+
+// Reproductor y tracklist
+const player = createPlayer(TRACKS);
+const $ = (selector) => document.querySelector(selector);
+const playerPanel = $("#tracklist");
+const playButton = $("#play");
+const nowLabel = $("#now-label");
+const nowTitle = $("#now-title");
+const seekInput = $("#seek");
+const timeCurrent = $("#time-current");
+const timeTotal = $("#time-total");
+const sourceNote = $("#audio-source");
+const vizCanvas = $("#viz");
+const viz = vizCanvas.getContext("2d");
+$("#album-total").textContent = `${TRACKS.length} temas · ${formatTime(TRACKS.reduce((sum, t) => sum + seconds(t.time), 0))}`;
+
+function span(className, text, tag = "span") {
+	const el = document.createElement(tag);
+	el.className = className;
+	el.textContent = text;
+	return el;
+}
+const trackButtons = TRACKS.map((track, i) => {
+	const button = document.createElement("button");
+	button.type = "button";
+	button.append(span("n", String(i + 1).padStart(2, "0")), span("t", track.title), span("", track.time, "time"));
+	button.addEventListener("click", () => player.play(i));
+	const item = document.createElement("li");
+	item.append(button);
+	$("#tracks").append(item);
+	return button;
+});
+
+let started = false;
+let seeking = false;
+player.onChange((state) => {
+	started ||= state.playing;
+	const track = TRACKS[state.index];
+	playerPanel.classList.toggle("playing", state.playing);
+	playButton.setAttribute("aria-label", state.playing ? "Pausar" : "Reproducir");
+	nowLabel.textContent = `${state.playing ? "Sonando" : "En pausa"} · ${String(state.index + 1).padStart(2, "0")}`;
+	nowTitle.textContent = track.title;
+	trackButtons.forEach((button, i) => button.setAttribute("aria-current", String(i === state.index)));
+	const duration = Number.isFinite(state.duration) ? state.duration : 0;
+	seekInput.max = duration;
+	if (!seeking) seekInput.value = state.current;
+	seekInput.style.setProperty("--progress", `${duration ? (state.current / duration) * 100 : 0}%`);
+	timeCurrent.textContent = formatTime(state.current);
+	timeTotal.textContent = formatTime(duration);
+	sourceNote.textContent = state.failed
+		? "No se pudo cargar el audio. Comprueba la conexión."
+		: state.source === "preview" ? "Preview oficial de 30 s · pon tus MP3 en public/audio para el tema completo" : "";
+	trailUniforms.uTint.value.set(track.tint);
+	trailUniforms.uProgress.value = duration ? state.current / duration : 0;
+	if (state.playing && ambient.playing) toggleSound();
+});
+playButton.addEventListener("click", () => player.toggle());
+$("#prev").addEventListener("click", () => player.prev());
+$("#next").addEventListener("click", () => player.next());
+seekInput.addEventListener("input", () => {
+	seeking = true;
+	player.seek(Number(seekInput.value));
+	seeking = false;
+});
 
 const tracklist = document.querySelector("#tracklist");
 const tracklistButton = document.querySelector("#tracklist-toggle");
@@ -161,8 +303,60 @@ window.addEventListener("keydown", (e) => {
 	if (k === "s") toggleSound();
 	if (k === "r") controls.reset();
 	if (k === "t") setTracklist(tracklist.hidden);
+	if (k === "p") player.toggle();
+	if (k === "n") player.next();
+	if (k === "b") player.prev();
 	if (k === "escape" && !tracklist.hidden) setTracklist(false);
 });
+
+// Piezas clicables de la portada: la bola reproduce o pausa, CURRENTS abre el tracklist y
+// TAME IMPALA pasa al tema siguiente
+function activate(name) {
+	if (name === "ball") return player.toggle();
+	if (name === "TitleAlbum") return setTracklist(tracklist.hidden);
+	if (name === "TitleBand") return player.next();
+}
+
+const raycaster = new THREE.Raycaster();
+const pointerNdc = new THREE.Vector2();
+const pickBox = new THREE.Box3();
+const hitPoint = new THREE.Vector3();
+// Lo primero que toca el rayo; el cuerpo del álbum tapa lo que hay detrás (p. ej. vista desde atrás)
+function pickAt(clientX, clientY) {
+	if (!model) return null;
+	pointerNdc.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
+	raycaster.setFromCamera(pointerNdc, camera);
+	const hits = raycaster.intersectObjects([parts.ball, parts.body].filter(Boolean), false);
+	let best = hits[0] ? { name: hits[0].object === parts.ball ? "ball" : null, distance: hits[0].distance } : null;
+	for (const name of ["TitleBand", "TitleAlbum"]) {
+		if (!parts[name]) continue;
+		pickBox.setFromObject(parts[name]).expandByScalar(0.03); // el texto es fino: caja algo mayor
+		if (!raycaster.ray.intersectBox(pickBox, hitPoint)) continue;
+		const distance = hitPoint.distanceTo(raycaster.ray.origin);
+		if (!best || distance < best.distance) best = { name, distance };
+	}
+	if (hits[0]) {
+		model.worldToLocal(hitPoint.copy(hits[0].point));
+		waveUniforms.uPointer.value.copy(hitPoint); // la onda del ratón nace donde toca la superficie
+	}
+	return { name: best?.name ?? null, overCover: hits.length > 0 };
+}
+
+let pointerOverCover = false;
+let downAt = null;
+canvas.addEventListener("pointerdown", (e) => (downAt = { x: e.clientX, y: e.clientY }));
+canvas.addEventListener("click", (e) => {
+	if (downAt && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 6) return; // era un arrastre
+	const hit = pickAt(e.clientX, e.clientY);
+	if (hit?.name) activate(hit.name);
+});
+canvas.addEventListener("pointermove", (e) => {
+	if (dragging) return;
+	const hit = pickAt(e.clientX, e.clientY);
+	pointerOverCover = Boolean(hit?.overCover);
+	canvas.classList.toggle("hovering", Boolean(hit?.name));
+});
+canvas.addEventListener("pointerleave", () => (pointerOverCover = false));
 
 // Interacción: ratón, táctil y giroscopio
 const target = new THREE.Vector2(); // inclinación deseada, en [-1, 1]
@@ -287,8 +481,18 @@ renderer.setAnimationLoop(() => {
 		clipPlanes[i].copy(windowPlanes[i]).applyMatrix4(cover.matrixWorld, clipNormalMatrix);
 	}
 
+	// música: graves que levantan las ondas y laten en la bola, brillo con los medios, visualizador
+	const { bass, mid, freq } = player.levels();
+	waveUniforms.uTime.value = t;
+	waveUniforms.uBass.value = THREE.MathUtils.lerp(waveUniforms.uBass.value, reducedMotion ? 0 : bass, 0.3);
+	waveUniforms.uHover.value = THREE.MathUtils.lerp(waveUniforms.uHover.value, pointerOverCover && !reducedMotion ? 1 : 0, 0.08);
+	trailUniforms.uActive.value = THREE.MathUtils.lerp(trailUniforms.uActive.value, started ? 1 : 0, 0.05);
+	if (parts.stripes) parts.stripes.material.emissiveIntensity = mid * 0.1;
+	if (parts.ball) parts.ball.scale.setScalar(1 + waveUniforms.uBass.value * 0.06);
+	if (!playerPanel.hidden) drawVisualizer(viz, vizCanvas.width, vizCanvas.height, freq, t);
+
 	// el entorno del reflejo gira con la portada
-	if (ball) ball.material.envMapRotation.copy(cover.rotation);
+	if (parts.ball) parts.ball.material.envMapRotation.copy(cover.rotation);
 
 	renderer.render(scene, camera);
 });

@@ -4,15 +4,22 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import * as THREE from "three";
 import * as shaders from "../src/shaders.js";
+import * as tracks from "../src/tracks.js";
 
 function setup(orientation) {
 	const listeners = new Map();
-	const stats = { toggles: 0, resets: 0 };
+	const stats = { toggles: 0, resets: 0, player: [] };
 	const elements = new Map();
 	const element = () => ({
+		classList: { toggle() {} },
+		style: { setProperty() {} },
+		append() {},
 		setAttribute(name, value) { this[name] = value; },
 		addEventListener(name, callback) { this[name] = callback; },
-		getContext: () => ({ createLinearGradient: () => ({ addColorStop() {} }), fillRect() {}, fillText() {} }),
+		getContext: () => ({
+			createLinearGradient: () => ({ addColorStop() {} }), fillRect() {}, fillText() {},
+			clearRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {},
+		}),
 	});
 	const preference = { matches: true, addEventListener(name, callback) { this[name] = callback; } };
 	const window = {
@@ -51,7 +58,27 @@ function setup(orientation) {
 	const context = vm.createContext({
 		THREE: { ...THREE, WebGLRenderer: Renderer, TextureLoader: Loader }, ...shaders,
 		GLTFLoader: Loader, DRACOLoader: Loader, OrbitControls: Controls,
-		createAmbient: () => ({ setTilt() {}, playing: false, toggle: async () => ++stats.toggles > 0 }),
+		createAmbient: () => ({
+			setTilt() {}, playing: false,
+			async toggle() { this.playing = !this.playing; stats.toggles++; return this.playing; },
+		}),
+		...tracks,
+		drawVisualizer() {},
+		createPlayer() {
+			let listener = null, playing = false;
+			const state = () => ({ index: 0, playing, source: "preview", failed: false, current: 0, duration: 30 });
+			const call = (name, value) => async () => {
+				stats.player.push(name);
+				if (value !== undefined) playing = value(playing);
+				listener?.(state());
+			};
+			return {
+				toggle: call("toggle", (p) => !p), next: call("next"), prev: call("prev"), play: call("play", () => true),
+				pause: call("pause", () => false), seek() {}, state,
+				levels: () => ({ bass: 0, mid: 0, high: 0, freq: null }),
+				onChange(fn) { listener = fn; },
+			};
+		},
 		window, document, screen: {}, performance, console,
 	});
 	vm.runInContext(source, context);
@@ -94,6 +121,38 @@ test("la tecla T y el botón abren y cierran el tracklist; Escape lo cierra", ()
 	assert.equal(panel.hidden, false);
 	key({ key: "t", metaKey: true });
 	assert.equal(panel.hidden, false);
+});
+
+test("la bola reproduce, CURRENTS abre el tracklist y TAME IMPALA pasa de tema", async () => {
+	const app = setup();
+	const panel = app.elements.get("#tracklist");
+	panel.hidden = true;
+	await app.run("activate('ball')");
+	assert.deepEqual(app.stats.player, ["toggle"]);
+	app.run("activate('TitleAlbum')");
+	assert.equal(panel.hidden, false);
+	await app.run("activate('TitleBand')");
+	assert.deepEqual(app.stats.player, ["toggle", "next"]);
+});
+
+test("P, N y B controlan el reproductor y la música apaga el sonido ambiente", async () => {
+	const app = setup();
+	const key = app.listeners.get("keydown");
+	key({ key: "s" });
+	await new Promise((resolve) => setTimeout(resolve));
+	assert.equal(app.run("ambient.playing"), true);
+	key({ key: "p" });
+	key({ key: "n" });
+	key({ key: "b" });
+	await new Promise((resolve) => setTimeout(resolve));
+	assert.deepEqual(app.stats.player, ["pause", "toggle", "next", "prev"]); // encender el ambiente pausa el disco
+	assert.equal(app.run("ambient.playing"), false);
+});
+
+test("la cámara puede dar la vuelta completa para ver la contraportada", () => {
+	const app = setup();
+	assert.equal(Number.isFinite(app.run("controls.minAzimuthAngle")), false);
+	assert.equal(Number.isFinite(app.run("controls.maxAzimuthAngle")), false);
 });
 
 test("los planos conservan el interior y recortan el exterior al inclinar", () => {
