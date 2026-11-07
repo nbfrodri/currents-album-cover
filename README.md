@@ -87,3 +87,7 @@ src/beat.js           latido de la bola al ritmo
 src/back.js           filas clicables de la contraportada
 src/shaders.js        shader de la capa de brillo
 ```
+
+## Créditos
+
+Proyecto académico de fan art, sin ánimo de lucro. *Currents* (2015) es de Tame Impala; la portada original es obra de Robert Beatty. Aquí no se incluye ningún audio: el reproductor usa los previews oficiales de 30 s de Apple o tus propios archivos en `public/audio/` (fuera de git). Tipografía Archivo Expanded bajo licencia SIL Open Font License (`public/fonts/OFL.txt`).
