@@ -449,19 +449,109 @@ input:focus-visible {
 	pointer-events: none;
 }
 
-.title {
-	font-size: 0.75rem;
+/* Botón de ayuda: pastilla abajo a la derecha, con el ? en un círculo dorado */
+.help-button {
+	position: fixed;
+	right: 24px;
+	bottom: 24px;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 44px;
+	padding: 6px 16px 6px 6px;
+	border: 1px solid rgb(242 181 68 / 0.45);
+	border-radius: 999px;
+	background: rgb(7 3 11 / 0.7);
+	backdrop-filter: blur(8px);
+	color: var(--gold);
+	font-size: 0.66rem;
 	font-weight: 700;
-	letter-spacing: 0.22em;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.help-mark {
+	display: grid;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	border-radius: 50%;
+	background: var(--gold);
+	color: var(--ink);
+	font-size: 0.85rem;
+	letter-spacing: 0;
+}
+
+.help-button:hover,
+.help-button:focus-visible {
+	background: var(--gold);
+	border-color: var(--gold);
+	color: var(--ink);
+}
+
+.help-button:hover .help-mark,
+.help-button:focus-visible .help-mark {
+	background: var(--ink);
+	color: var(--gold);
+}
+
+/* Ayuda (popover nativo): se cierra con Esc o al pulsar fuera */
+.help {
+	inset: auto 24px 80px auto;
+	margin: 0;
+	width: min(420px, calc(100% - 32px));
+	padding: 18px 20px;
+	background: var(--panel);
+	color: var(--text);
+	border: 1px solid var(--line);
+	backdrop-filter: blur(12px);
+	font-size: 0.68rem;
+	letter-spacing: 0.04em;
+}
+
+.help::backdrop {
+	background: rgb(7 3 11 / 0.35);
+}
+
+.help h2 {
+	margin-bottom: 12px;
+	font-size: 0.68rem;
+	font-weight: 700;
+	letter-spacing: 0.18em;
 	text-transform: uppercase;
 	color: var(--gold);
 }
 
-.hint {
-	font-size: 0.6rem;
-	letter-spacing: 0.14em;
+.help dl {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 8px 14px;
+}
+
+.help dt {
+	font-weight: 700;
 	text-transform: uppercase;
+	color: var(--lilac);
+}
+
+.help dd {
+	margin: 0;
 	color: var(--muted);
+}
+
+.help .keys {
+	margin-top: 14px;
+	line-height: 2;
+	color: var(--muted);
+}
+
+.help kbd {
+	font: inherit;
+	font-weight: 700;
+	color: var(--text);
+	padding: 1px 6px;
+	border: 1px solid var(--line);
 }
 
 .caption [role="status"] {

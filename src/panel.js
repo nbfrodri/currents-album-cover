@@ -17,6 +17,34 @@ function span(doc, className, text, tag = "span") {
 	return el;
 }
 
+// Un botón por tema: al pulsarlo suena ese tema
+function renderTracks(doc, list, tracks, player) {
+	return tracks.map((track, i) => {
+		const button = doc.createElement("button");
+		button.type = "button";
+		button.append(span(doc, "n", String(i + 1).padStart(2, "0")), span(doc, "t", track.title), span(doc, "", track.time, "time"));
+		button.addEventListener("click", () => player.play(i));
+		const item = doc.createElement("li");
+		item.append(button);
+		list.append(item);
+		return button;
+	});
+}
+
+// Volumen y silencio; el último volumen se recuerda en este navegador
+function wireVolume(volumeInput, muteButton, player) {
+	volumeInput.addEventListener("input", () => {
+		player.setVolume(Number(volumeInput.value));
+		try {
+			localStorage.setItem(VOLUME_KEY, volumeInput.value);
+		} catch {
+			// sin almacenamiento (modo privado): el volumen vale solo para esta visita
+		}
+	});
+	muteButton.addEventListener("click", () => player.toggleMute());
+	player.setVolume(savedVolume());
+}
+
 // Panel del reproductor: tema actual, controles, barra de progreso y tracklist clicable. Se abre
 // solo al empezar un tema; se puede minimizar a una barra o cerrar (y no vuelve a abrirse solo
 // hasta el siguiente tema). onState recibe cada cambio del reproductor (para que la portada
@@ -48,16 +76,8 @@ export function mountPanel(doc, player, tracks, onState) {
 	$("#player-close").addEventListener("click", () => setOpen(false));
 	$("#album-total").textContent = `${tracks.length} temas · ${formatTime(tracks.reduce((sum, t) => sum + seconds(t.time), 0))}`;
 
-	const trackButtons = tracks.map((track, i) => {
-		const button = doc.createElement("button");
-		button.type = "button";
-		button.append(span(doc, "n", String(i + 1).padStart(2, "0")), span(doc, "t", track.title), span(doc, "", track.time, "time"));
-		button.addEventListener("click", () => player.play(i));
-		const item = doc.createElement("li");
-		item.append(button);
-		$("#tracks").append(item);
-		return button;
-	});
+
+	const trackButtons = renderTracks(doc, $("#tracks"), tracks, player);
 
 	let seeking = false;
 	let shownFor = null; // tema para el que ya se abrió solo: cerrado, sigue cerrado hasta otro
@@ -81,9 +101,7 @@ export function mountPanel(doc, player, tracks, onState) {
 		volumeInput.style.setProperty("--progress", `${state.muted ? 0 : state.volume * 100}%`);
 		muteButton.setAttribute("aria-pressed", String(state.muted));
 		muteButton.setAttribute("aria-label", state.muted ? "Activar el sonido" : "Silenciar");
-		sourceNote.textContent = state.failed
-			? "No se pudo cargar el audio. Comprueba la conexión."
-			: state.source === "preview" ? "Preview oficial de 30 s · pon tus MP3 en public/audio para el tema completo" : "";
+		sourceNote.textContent = state.failed ? "No se pudo cargar el audio. Comprueba la conexión." : "";
 		onState(state);
 	});
 	playButton.addEventListener("click", () => player.toggle());
@@ -95,16 +113,6 @@ export function mountPanel(doc, player, tracks, onState) {
 		seeking = false;
 	});
 
-	volumeInput.addEventListener("input", () => {
-		player.setVolume(Number(volumeInput.value));
-		try {
-			localStorage.setItem(VOLUME_KEY, volumeInput.value);
-		} catch {
-			// sin almacenamiento (modo privado): el volumen vale solo para esta visita
-		}
-	});
-	muteButton.addEventListener("click", () => player.toggleMute());
-	player.setVolume(savedVolume());
 
 	// abre el reproductor minimizado si estaba cerrado (al tocar la bola): no tapa la portada
 	function reveal() {
@@ -112,6 +120,8 @@ export function mountPanel(doc, player, tracks, onState) {
 		setMinimized(true);
 		setOpen(true);
 	}
+
+	wireVolume(volumeInput, muteButton, player);
 
 	return { setOpen, reveal, context: canvas.getContext("2d"), width: canvas.width, height: canvas.height };
 }

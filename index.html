@@ -67,9 +67,23 @@
 			</div>
 		</section>
 
+		<div id="help" class="help" popover>
+			<h2>Controles</h2>
+			<dl>
+				<dt>Arrastrar</dt><dd>Girar el álbum, también para ver la contraportada</dd>
+				<dt>Rueda · pellizcar</dt><dd>Acercar y alejar · clic derecho para desplazar</dd>
+				<dt>La bola</dt><dd>Reproducir o pausar</dd>
+				<dt>TAME IMPALA · CURRENTS</dt><dd>Tema siguiente · abrir el reproductor</dd>
+				<dt>Contraportada</dt><dd>Clic en un tema para escucharlo</dd>
+			</dl>
+			<p class="keys"><kbd>P</kbd> pausa <kbd>N</kbd> <kbd>B</kbd> siguiente / anterior <kbd>M</kbd> silencio <kbd>T</kbd> reproductor <kbd>R</kbd> centrar <kbd>?</kbd> esta ayuda <kbd>Esc</kbd> cerrar</p>
+		</div>
+
+		<button id="help-button" class="help-button" type="button" popovertarget="help" aria-keyshortcuts="Shift+?">
+			<span class="help-mark" aria-hidden="true">?</span> Controles
+		</button>
+
 		<footer class="caption">
-			<span class="title">Tame Impala — Currents</span>
-			<span class="hint">Arrastra para girar (también por detrás) · rueda para acercar · toca la bola para reproducir · R centra · T reproductor</span>
 			<span id="model-status" role="status">Cargando portada…</span>
 		</footer>
 		<script type="module" src="/src/main.js"></script>

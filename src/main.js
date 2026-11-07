@@ -209,6 +209,7 @@ window.addEventListener("keydown", (e) => {
 	if (k === "n") player.next();
 	if (k === "b") player.prev();
 	if (k === "m") player.toggleMute();
+	if (e.key === "?") document.querySelector("#help").togglePopover?.();
 	if (k === "escape" && !tracklist.hidden) setTracklist(false);
 });
 
