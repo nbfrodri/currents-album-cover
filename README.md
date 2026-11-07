@@ -2,6 +2,8 @@
 
 Portada 3D interactiva inspirada en *Currents* (Tame Impala), hecha con **Three.js** y modelada de forma procedural en **Blender** (vía MCP). Se comporta como una carta holográfica de TCG: al inclinarla cambia de color, brilla y sus capas se separan por parallax.
 
+**Demo:** https://nbfrodri.github.io/currents-album-cover/
+
 ## Ejecutar
 
 ```bash

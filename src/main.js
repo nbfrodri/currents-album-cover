@@ -116,7 +116,7 @@ glare.renderOrder = 1;
 cover.add(glare);
 
 // Reflejo del cromo: panorámica renderizada en Blender desde el centro de la bola
-const ballEnv = new THREE.TextureLoader().load("/models/ball_env.jpg");
+const ballEnv = new THREE.TextureLoader().load("models/ball_env.jpg");
 ballEnv.mapping = THREE.EquirectangularReflectionMapping;
 ballEnv.colorSpace = THREE.SRGBColorSpace;
 
@@ -140,9 +140,9 @@ function placeBackMarker(index) {
 }
 let model = null;
 
-const loader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath("/draco/"));
+const loader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath("draco/"));
 const modelStatus = document.querySelector("#model-status");
-loader.load("/models/currents.glb", (gltf) => {
+loader.load("models/currents.glb", (gltf) => {
 	model = gltf.scene;
 	model.rotation.x = Math.PI / 2; // Blender exporta en Y-up; la portada mira a +Z
 	model.traverse((obj) => {

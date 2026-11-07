@@ -16,7 +16,7 @@ export const TRACKS = [
 	{ title: "New Person, Same Old Mistakes", time: "6:03", preview: "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/55/9b/44/559b443e-06b6-bc62-f3f7-5f21a37971b0/mzaf_16483469776306833254.plus.aac.p.m4a" },
 ];
 
-export const localSource = (index) => `/audio/${String(index + 1).padStart(2, "0")}.mp3`;
+export const localSource = (index) => `audio/${String(index + 1).padStart(2, "0")}.mp3`;
 
 export const seconds = (time) => {
 	const [m, s] = time.split(":").map(Number);

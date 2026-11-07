@@ -11,7 +11,7 @@ function fakeAudio() {
 		emit(name) { for (const fn of listeners[name] ?? []) fn(); },
 		play() {
 			this.plays++;
-			if (this.src.startsWith("/audio/")) return Promise.reject(new Error("no soportado"));
+			if (this.src.startsWith("audio/")) return Promise.reject(new Error("no soportado"));
 			this.paused = false;
 			return Promise.resolve();
 		},
@@ -43,7 +43,7 @@ function setup() {
 test("intenta el MP3 local y, si no existe, reproduce el preview oficial del mismo tema", async () => {
 	const { audio, player } = setup();
 	await player.play(2);
-	assert.equal(audio.src, "/audio/03.mp3");
+	assert.equal(audio.src, "audio/03.mp3");
 	audio.emit("error");
 	assert.equal(audio.src, TRACKS[2].preview);
 	assert.equal(player.state().source, "preview");
@@ -57,7 +57,7 @@ test("al terminar un tema pasa al siguiente y al final vuelve al primero", async
 	await player.play(12);
 	audio.emit("ended");
 	assert.equal(player.state().index, 0);
-	assert.equal(audio.src, "/audio/01.mp3");
+	assert.equal(audio.src, "audio/01.mp3");
 });
 
 test("anterior reinicia el tema si ya lleva unos segundos y, si no, va al tema previo", async () => {
