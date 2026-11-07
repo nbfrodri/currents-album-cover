@@ -2,7 +2,7 @@ import { localSource } from "./tracks.js";
 
 const RESTART_AFTER = 3; // segundos: "anterior" reinicia el tema si ya ha avanzado más
 
-// Graves, medios y agudos (0..1) de un espectro de bytes
+// Bombo, graves, medios y agudos (0..1) de un espectro de bytes (bins de ~86 Hz con fft 512)
 function bandLevels(freq) {
 	const band = (from, to) => {
 		let sum = 0;
@@ -10,13 +10,13 @@ function bandLevels(freq) {
 		return sum / (to - from) / 255;
 	};
 	const n = freq.length;
-	return { bass: band(1, 8), mid: band(8, Math.floor(n * 0.4)), high: band(Math.floor(n * 0.4), n), freq };
+	return { kick: band(1, 4), bass: band(1, 8), mid: band(8, Math.floor(n * 0.4)), high: band(Math.floor(n * 0.4), n), freq };
 }
 
 function createAnalyser(context, audio) {
 	const analyser = context.createAnalyser();
 	analyser.fftSize = 512;
-	analyser.smoothingTimeConstant = 0.8;
+	analyser.smoothingTimeConstant = 0.6; // poco suavizado: el bombo llega con golpe al latido
 	context.createMediaElementSource(audio).connect(analyser);
 	analyser.connect(context.destination);
 	return analyser;
@@ -134,7 +134,7 @@ export function createPlayer(tracks, { createAudio = () => new Audio(), createCo
 
 	// Niveles y espectro completo para la portada y el visualizador
 	function levels() {
-		if (!analyser) return { bass: 0, mid: 0, high: 0, freq: null };
+		if (!analyser) return { kick: 0, bass: 0, mid: 0, high: 0, freq: null };
 		analyser.getByteFrequencyData(freq);
 		return bandLevels(freq);
 	}

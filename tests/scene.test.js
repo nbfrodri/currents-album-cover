@@ -7,10 +7,13 @@ import * as shaders from "../src/shaders.js";
 import * as tracks from "../src/tracks.js";
 import * as panel from "../src/panel.js";
 import * as waves from "../src/waves.js";
+import * as beat from "../src/beat.js";
+import * as back from "../src/back.js";
+import * as backdrop from "../src/backdrop.js";
 
 function setup(orientation) {
 	const listeners = new Map();
-	const stats = { toggles: 0, resets: 0, player: [] };
+	const stats = { resets: 0, player: [] };
 	const elements = new Map();
 	const element = () => ({
 		classList: { toggle() {} },
@@ -60,24 +63,21 @@ function setup(orientation) {
 	const context = vm.createContext({
 		THREE: { ...THREE, WebGLRenderer: Renderer, TextureLoader: Loader }, ...shaders,
 		GLTFLoader: Loader, DRACOLoader: Loader, OrbitControls: Controls,
-		createAmbient: () => ({
-			setTilt() {}, playing: false,
-			async toggle() { this.playing = !this.playing; stats.toggles++; return this.playing; },
-		}),
-		...tracks, ...panel, ...waves,
+		...tracks, ...panel, ...waves, ...beat, ...back, ...backdrop,
 		drawVisualizer() {},
 		createPlayer() {
-			let listener = null, playing = false;
-			const state = () => ({ index: 0, playing, source: "preview", failed: false, current: 0, duration: 30 });
+			let listener = null, playing = false, index = 0;
+			const state = () => ({ index, playing, source: "preview", failed: false, current: 0, duration: 30, volume: 1, muted: false });
 			const call = (name, value) => async () => {
 				stats.player.push(name);
 				if (value !== undefined) playing = value(playing);
 				listener?.(state());
 			};
 			return {
-				toggle: call("toggle", (p) => !p), next: call("next"), prev: call("prev"), play: call("play", () => true),
+				toggle: call("toggle", (p) => !p), prev: call("prev"), play: call("play", () => true),
+				next: async () => { index++; playing = true; await call("next")(); },
 				pause: call("pause", () => false), seek() {}, setVolume() {}, toggleMute() {}, state,
-				levels: () => ({ bass: 0, mid: 0, high: 0, freq: null }),
+				levels: () => ({ kick: 0, bass: 0, mid: 0, high: 0, freq: null }),
 				onChange(fn) { listener = fn; },
 			};
 		},
@@ -98,31 +98,53 @@ test("la cámara conserva la portada dentro del plano lejano en ventanas estrech
 test("los atajos no interceptan combinaciones del navegador ni campos de texto", () => {
 	const app = setup();
 	const key = app.listeners.get("keydown");
-	key({ key: "s", ctrlKey: true });
-	key({ key: "s", target: { tagName: "INPUT" } });
-	assert.equal(app.stats.toggles, 0);
-	key({ key: "s" });
-	assert.equal(app.stats.toggles, 1);
+	key({ key: "p", ctrlKey: true });
+	key({ key: "p", target: { tagName: "INPUT" } });
+	assert.deepEqual(app.stats.player, []);
+	key({ key: "p" });
+	assert.deepEqual(app.stats.player, ["toggle"]);
 	key({ key: "r" });
 	assert.equal(app.stats.resets, 1);
 });
 
-test("la tecla T y el botón abren y cierran el tracklist; Escape lo cierra", () => {
+test("la tecla T abre y cierra el reproductor; Escape y el botón de cerrar lo cierran", () => {
 	const app = setup();
 	const panel = app.elements.get("#tracklist");
-	const button = app.elements.get("#tracklist-toggle");
 	panel.hidden = true;
 	const key = app.listeners.get("keydown");
 	key({ key: "t" });
 	assert.equal(panel.hidden, false);
-	assert.equal(button["aria-expanded"], "true");
 	key({ key: "Escape" });
 	assert.equal(panel.hidden, true);
-	assert.equal(button["aria-expanded"], "false");
-	button.click();
-	assert.equal(panel.hidden, false);
+	key({ key: "t" });
+	app.elements.get("#player-close").click();
+	assert.equal(panel.hidden, true);
 	key({ key: "t", metaKey: true });
+	assert.equal(panel.hidden, true);
+	assert.equal(app.elements.has("#tracklist-toggle"), false); // sin botones arriba
+	assert.equal(app.elements.has("#reset"), false);
+});
+
+test("al empezar un tema se abre el reproductor; cerrado sigue así hasta el siguiente tema", async () => {
+	const app = setup();
+	const panel = app.elements.get("#tracklist");
+	panel.hidden = true;
+	await app.run("player.toggle()");
 	assert.equal(panel.hidden, false);
+	app.elements.get("#player-close").click();
+	await app.run("player.toggle(); player.toggle()"); // pausa y sigue el mismo tema
+	assert.equal(panel.hidden, true);
+	await app.run("player.next()");
+	assert.equal(panel.hidden, false);
+});
+
+test("minimizar deja el reproductor en una barra y se puede volver a desplegar", () => {
+	const app = setup();
+	const min = app.elements.get("#player-min");
+	min.click();
+	assert.equal(min["aria-expanded"], "false");
+	min.click();
+	assert.equal(min["aria-expanded"], "true");
 });
 
 test("la bola reproduce, CURRENTS abre el tracklist y TAME IMPALA pasa de tema", async () => {
@@ -131,24 +153,23 @@ test("la bola reproduce, CURRENTS abre el tracklist y TAME IMPALA pasa de tema",
 	panel.hidden = true;
 	await app.run("activate('ball')");
 	assert.deepEqual(app.stats.player, ["toggle"]);
+	assert.equal(panel.hidden, false); // la bola abre el reproductor cerrado…
+	assert.equal(app.elements.get("#player-min")["aria-expanded"], "false"); // …minimizado
+	app.run("activate('TitleAlbum')"); // CURRENTS lo abre y lo cierra
+	assert.equal(panel.hidden, true);
 	app.run("activate('TitleAlbum')");
 	assert.equal(panel.hidden, false);
 	await app.run("activate('TitleBand')");
 	assert.deepEqual(app.stats.player, ["toggle", "next"]);
 });
 
-test("P, N y B controlan el reproductor y la música apaga el sonido ambiente", async () => {
+test("P, N y B controlan el reproductor; S ya no hace nada (sin sonido ambiente)", async () => {
 	const app = setup();
 	const key = app.listeners.get("keydown");
-	key({ key: "s" });
+	for (const k of ["s", "p", "n", "b"]) key({ key: k });
 	await new Promise((resolve) => setTimeout(resolve));
-	assert.equal(app.run("ambient.playing"), true);
-	key({ key: "p" });
-	key({ key: "n" });
-	key({ key: "b" });
-	await new Promise((resolve) => setTimeout(resolve));
-	assert.deepEqual(app.stats.player, ["pause", "toggle", "next", "prev"]); // encender el ambiente pausa el disco
-	assert.equal(app.run("ambient.playing"), false);
+	assert.deepEqual(app.stats.player, ["toggle", "next", "prev"]);
+	assert.equal(app.elements.has("#sound"), false);
 });
 
 test("la cámara puede dar la vuelta completa para ver la contraportada", () => {

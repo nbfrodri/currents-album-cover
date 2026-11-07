@@ -2,14 +2,15 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { createAmbient } from "./audio.js";
 import { createPlayer } from "./player.js";
+import { createBackdrop } from "./backdrop.js";
 import { backRowCenter, backTrackAt } from "./back.js";
+import { createBeat } from "./beat.js";
 import { mountPanel } from "./panel.js";
 import { glareShader } from "./shaders.js";
 import { TRACKS } from "./tracks.js";
 import { drawVisualizer } from "./visualizer.js";
-import { addWaves, trailUniforms, trailWaves, waveUniforms } from "./waves.js";
+import { addTrailPoint, addWaves, trailUniforms, trailWaves, waveUniforms } from "./waves.js";
 
 const MAX_TILT = { x: 0.35, y: 0.5 }; // radianes
 const COVER = 2; // la portada mide 2x2 (igual que en Blender)
@@ -27,6 +28,8 @@ renderer.localClippingEnabled = true;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 50);
+const backdrop = createBackdrop(); // fondo de rayas que ondulan con la música
+scene.add(backdrop.mesh);
 
 // Cámara libre: arrastrar gira, la rueda (o pellizcar) acerca y el botón derecho (o dos dedos) desplaza
 const controls = new OrbitControls(camera, canvas);
@@ -130,8 +133,8 @@ backMarker.visible = false;
 function placeBackMarker(index) {
 	const rows = parts.back?.userData.track_rows;
 	if (!rows) return;
-	const { x, z } = backRowCenter(index, rows);
-	backMarker.scale.set(rows.half * 2 + 0.08, rows.step * 0.9, 1);
+	const { x, z, height } = backRowCenter(index, rows);
+	backMarker.scale.set(rows.half * 2 + 0.08, height, 1);
 	backMarker.position.set(x, rows.y - 0.003, z); // justo por fuera del reverso
 	backMarker.visible = true;
 }
@@ -148,16 +151,17 @@ loader.load("/models/currents.glb", (gltf) => {
 		obj.material.clippingPlanes = clipPlanes;
 		if (obj.name === "Ball") {
 			parts.ball = obj;
+			obj.geometry.computeBoundingSphere();
+			obj.userData.restY = obj.position.y; // altura en reposo (y = arriba en el modelo)
+			obj.userData.radius = obj.geometry.boundingSphere.radius;
+			waveUniforms.uBall.value.set(obj.position.x, obj.position.z);
 			obj.material.envMap = ballEnv;
 			obj.material.envMapIntensity = 1.0;
 		}
 		if (obj.name === "Body") parts.body = obj;
-		if (obj.name === "BackArt") parts.back = obj;
 		if (obj.name === "TitleBand" || obj.name === "TitleAlbum") parts[obj.name] = obj;
 		if (obj.name === "Stripes") {
 			parts.stripes = obj;
-			obj.material.emissive.set(0xc9aef2);
-			obj.material.emissiveIntensity = 0;
 			addWaves(obj.material);
 		}
 		if (obj.name === "Trail") {
@@ -172,6 +176,8 @@ loader.load("/models/currents.glb", (gltf) => {
 			trailWaves(obj.material);
 		}
 	});
+	// BackArt tiene varios materiales: llega como un grupo, y sus extras (las filas) están en él
+	parts.back = model.getObjectByName("BackArt");
 	backMarker.material.clippingPlanes = clipPlanes;
 	model.add(backMarker);
 	floor.add(model);
@@ -180,45 +186,23 @@ loader.load("/models/currents.glb", (gltf) => {
 	modelStatus.textContent = "No se pudo cargar la portada. Recarga la página para reintentar.";
 });
 
-const ambient = createAmbient();
-const soundButton = document.querySelector("#sound");
-const soundStatus = document.querySelector("#sound-status");
-async function toggleSound() {
-	try {
-		if (!ambient.playing) player.pause(); // el ambiente y el disco no suenan a la vez
-		soundButton.setAttribute("aria-pressed", String(await ambient.toggle()));
-		soundStatus.textContent = "";
-	} catch {
-		soundButton.setAttribute("aria-pressed", String(ambient.playing));
-		soundStatus.textContent = "No se pudo cambiar el sonido. Pulsa Sonido para reintentar.";
-	}
-}
-soundButton.addEventListener("click", toggleSound);
-
 // Reproductor y tracklist
 const player = createPlayer(TRACKS);
 let started = false; // la estela solo se tiñe cuando ya ha sonado algo
-const viz = mountPanel(document, player, TRACKS, (state) => {
+const panel = mountPanel(document, player, TRACKS, (state) => {
 	started ||= state.playing;
 	if (started) placeBackMarker(state.index);
 	trailUniforms.uTint.value.set(TRACKS[state.index].tint);
 	const duration = Number.isFinite(state.duration) ? state.duration : 0;
 	trailUniforms.uProgress.value = duration ? state.current / duration : 0;
-	if (state.playing && ambient.playing) toggleSound();
 });
 const tracklist = document.querySelector("#tracklist");
-const tracklistButton = document.querySelector("#tracklist-toggle");
-function setTracklist(open) {
-	tracklist.hidden = !open;
-	tracklistButton.setAttribute("aria-expanded", String(open));
-}
-tracklistButton.addEventListener("click", () => setTracklist(tracklist.hidden));
+const setTracklist = panel.setOpen;
 
 window.addEventListener("keydown", (e) => {
 	if (e.repeat || e.defaultPrevented || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
 	if (e.target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName)) return;
 	const k = e.key.toLowerCase();
-	if (k === "s") toggleSound();
 	if (k === "r") controls.reset();
 	if (k === "t") setTracklist(tracklist.hidden);
 	if (k === "p") player.toggle();
@@ -232,7 +216,10 @@ window.addEventListener("keydown", (e) => {
 // TAME IMPALA pasa al tema siguiente
 function activate(name, index) {
 	if (name === "track") return player.play(index);
-	if (name === "ball") return player.toggle();
+	if (name === "ball") {
+		panel.reveal();
+		return player.toggle();
+	}
 	if (name === "TitleAlbum") return setTracklist(tracklist.hidden);
 	if (name === "TitleBand") return player.next();
 }
@@ -260,14 +247,14 @@ function pickAt(clientX, clientY) {
 		const distance = hitPoint.distanceTo(raycaster.ray.origin);
 		if (!best || distance < best.distance) best = { name, distance };
 	}
-	if (hits[0]) {
+	const front = hits[0] && hits[0].object === parts.body && hits[0].face.normal.y > 0.5;
+	if (front) {
 		model.worldToLocal(hitPoint.copy(hits[0].point));
-		waveUniforms.uPointer.value.copy(hitPoint); // la onda del ratón nace donde toca la superficie
+		if (!reducedMotion && !dragging) addTrailPoint(hitPoint, waveUniforms.uTime.value); // ondas del rastro del ratón
 	}
-	return { name: best?.name ?? null, index: best?.index, overCover: hits.length > 0 };
+	return { name: best?.name ?? null, index: best?.index };
 }
 
-let pointerOverCover = false;
 let downAt = null;
 canvas.addEventListener("pointerdown", (e) => (downAt = { x: e.clientX, y: e.clientY }));
 canvas.addEventListener("click", (e) => {
@@ -278,10 +265,8 @@ canvas.addEventListener("click", (e) => {
 canvas.addEventListener("pointermove", (e) => {
 	if (dragging) return;
 	const hit = pickAt(e.clientX, e.clientY);
-	pointerOverCover = Boolean(hit?.overCover);
 	canvas.classList.toggle("hovering", Boolean(hit?.name));
 });
-canvas.addEventListener("pointerleave", () => (pointerOverCover = false));
 
 // Inclinación de la portada (efecto carta): solo con el giroscopio del móvil. Con ratón, la
 // portada únicamente se mueve al arrastrar, para que no se escape al ir a hacer clic.
@@ -336,7 +321,6 @@ if (DOE?.requestPermission) {
 	listenOrientation();
 }
 
-document.querySelector("#reset").addEventListener("click", () => controls.reset());
 
 // Bucle
 let framed = false;
@@ -377,6 +361,8 @@ function adaptQuality() {
 
 const clipNormalMatrix = new THREE.Matrix3();
 const startedAt = performance.now();
+const beat = createBeat();
+let lastFrame = 0;
 renderer.setAnimationLoop(() => {
 	const t = (performance.now() - startedAt) / 1000;
 	adaptQuality();
@@ -386,7 +372,6 @@ renderer.setAnimationLoop(() => {
 	cover.rotation.y = tilt.x * MAX_TILT.y;
 	cover.rotation.x = tilt.y * MAX_TILT.x;
 
-	ambient.setTilt(cover.rotation.y, cover.rotation.x);
 	glareUniforms.uPointer.value.set(0.5 + tilt.x * 0.5, 0.5 - tilt.y * 0.5);
 	glareUniforms.uStrength.value = THREE.MathUtils.lerp(glareUniforms.uStrength.value, 0.15, 0.05);
 
@@ -397,14 +382,24 @@ renderer.setAnimationLoop(() => {
 	}
 
 	// música: graves que levantan las ondas y laten en la bola, brillo con los medios, visualizador
-	const { bass, mid, freq } = player.levels();
+	const { kick, bass, mid, freq } = player.levels();
 	waveUniforms.uTime.value = t;
 	waveUniforms.uBass.value = THREE.MathUtils.lerp(waveUniforms.uBass.value, reducedMotion ? 0 : bass, 0.3);
-	waveUniforms.uHover.value = THREE.MathUtils.lerp(waveUniforms.uHover.value, pointerOverCover && !reducedMotion ? 1 : 0, 0.08);
 	trailUniforms.uActive.value = THREE.MathUtils.lerp(trailUniforms.uActive.value, started ? 1 : 0, 0.05);
-	if (parts.stripes) parts.stripes.material.emissiveIntensity = mid * 0.1;
-	if (parts.ball) parts.ball.scale.setScalar(1 + waveUniforms.uBass.value * 0.06);
-	if (!tracklist.hidden) drawVisualizer(viz.context, viz.width, viz.height, freq, t);
+	// la bola late con cada golpe de graves (bump rápido que se relaja) y respira con el volumen
+	const dt = Math.min(t - lastFrame, 0.1);
+	lastFrame = t;
+	const pulse = reducedMotion ? 0 : beat.update(kick, dt);
+	if (parts.ball) {
+		// late hacia arriba: la base sigue en el fondo del hoyo y nunca asoma por la contraportada
+		const scale = 1 + pulse * 0.18 + waveUniforms.uBass.value * 0.015;
+		parts.ball.scale.setScalar(scale);
+		parts.ball.position.y = parts.ball.userData.restY + parts.ball.userData.radius * (scale - 1);
+	}
+	waveUniforms.uPulse.value = pulse;
+	waveUniforms.uBeatAge.value = beat.age;
+	backdrop.update({ dt, bass, mid, pulse, beatAge: beat.age, aspect: camera.aspect, motion: !reducedMotion });
+	if (!tracklist.hidden) drawVisualizer(panel.context, panel.width, panel.height, freq, t);
 
 	// el entorno del reflejo gira con la portada
 	if (parts.ball) parts.ball.material.envMapRotation.copy(cover.rotation);

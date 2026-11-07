@@ -81,54 +81,16 @@ body {
 	color: var(--gold);
 }
 
-.controls {
-	display: flex;
-	flex-wrap: wrap;
-	justify-content: center;
-	gap: 6px;
-	pointer-events: auto;
-}
-
 button {
 	font: inherit;
 	color: inherit;
 	cursor: pointer;
 }
 
-.controls button {
-	font-size: 0.68rem;
-	font-weight: 700;
-	letter-spacing: 0.16em;
-	text-transform: uppercase;
-	background: rgb(7 3 11 / 0.55);
-	border: 1px solid rgb(201 174 242 / 0.35);
-	padding: 10px 14px;
-	min-height: 40px;
-	backdrop-filter: blur(6px);
-	transition: background 0.2s, color 0.2s, border-color 0.2s;
-}
-
-.controls button:hover {
-	border-color: var(--gold);
-}
-
-.controls button[aria-pressed="true"],
-.controls button[aria-expanded="true"] {
-	background: var(--gold);
-	border-color: var(--gold);
-	color: var(--ink);
-}
-
 button:focus-visible,
 input:focus-visible {
 	outline: 2px solid var(--gold);
 	outline-offset: 2px;
-}
-
-kbd {
-	font: inherit;
-	opacity: 0.6;
-	margin-left: 6px;
 }
 
 /* Reproductor */
@@ -166,8 +128,59 @@ kbd {
 
 .player-head {
 	display: flex;
-	justify-content: space-between;
-	align-items: baseline;
+	align-items: center;
+	gap: 8px;
+}
+
+.player-head h2 {
+	flex: 1;
+	white-space: nowrap;
+}
+
+#album-total {
+	white-space: nowrap;
+}
+
+.head-button {
+	flex: none;
+	width: 32px;
+	height: 32px;
+	margin: -8px -6px -8px 0;
+	display: grid;
+	place-items: center;
+	background: transparent;
+	border: 0;
+	color: var(--muted);
+}
+
+.head-button:hover {
+	color: var(--gold);
+}
+
+.head-button svg {
+	width: 14px;
+	height: 14px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.6;
+}
+
+.head-button .icon-max,
+.player.minimized .head-button .icon-min {
+	display: none;
+}
+
+.player.minimized .head-button .icon-max {
+	display: block;
+}
+
+/* Minimizado: solo el tema, sus controles y el progreso */
+.player.minimized #viz,
+.player.minimized .volume,
+.player.minimized .tracks,
+.player.minimized .note,
+.player.minimized #album-total {
+	display: none;
 }
 
 .player h2 {

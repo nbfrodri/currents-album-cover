@@ -50,8 +50,8 @@ class Flow:
 	def mask(self, x, y):
 		"""Abanico diagonal: el lado inferior izquierdo sigue siendo tranquilo."""
 		a, c = self.along_across(x, y)
-		width = 0.10 + 0.48 * np.maximum(a, 0)
-		return smoothstep(-0.025, 0.11, a) * (1 - smoothstep(width, width + 0.09, np.abs(c)))
+		width = 0.12 + 0.58 * np.maximum(a, 0)
+		return smoothstep(-0.04, 0.1, a) * (1 - smoothstep(width, width + 0.1, np.abs(c)))
 
 	@staticmethod
 	def tail(a):

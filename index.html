@@ -11,11 +11,6 @@
 		<canvas id="scene" role="img" aria-label="Portada 3D de Currents: rayas lila alrededor de una bola cromada y una estela multicolor. Por detrás, la contraportada con el tracklist."></canvas>
 		<header class="hud">
 			<span class="brand">Tame Impala</span>
-			<nav class="controls" aria-label="Controles de la portada">
-				<button id="tracklist-toggle" type="button" aria-expanded="false" aria-controls="tracklist" aria-keyshortcuts="T" title="Mostrar el reproductor y el tracklist (tecla T)">Tracklist <kbd aria-hidden="true">T</kbd></button>
-				<button id="reset" type="button" aria-keyshortcuts="R" title="Volver a la vista inicial (tecla R)">Centrar <kbd aria-hidden="true">R</kbd></button>
-				<button id="sound" type="button" aria-pressed="false" aria-keyshortcuts="S" title="Activar el sonido ambiente (tecla S)">Ambiente <kbd aria-hidden="true">S</kbd></button>
-			</nav>
 			<span class="brand">Currents</span>
 		</header>
 
@@ -25,6 +20,13 @@
 				<header class="player-head">
 					<h2 id="tracklist-title">Currents · 2015</h2>
 					<span id="album-total"></span>
+					<button id="player-min" class="head-button" type="button" aria-expanded="true" aria-controls="tracklist" aria-label="Minimizar el reproductor">
+						<svg class="icon-min" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8 H13" /></svg>
+						<svg class="icon-max" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3 H13 V13 H3 Z" /></svg>
+					</button>
+					<button id="player-close" class="head-button" type="button" aria-label="Cerrar el reproductor" aria-keyshortcuts="Escape">
+						<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4 L12 12 M12 4 L4 12" /></svg>
+					</button>
 				</header>
 
 				<div class="now">
@@ -67,9 +69,8 @@
 
 		<footer class="caption">
 			<span class="title">Tame Impala — Currents</span>
-			<span class="hint">Arrastra para girar (también por detrás) · rueda para acercar · toca la bola para reproducir</span>
+			<span class="hint">Arrastra para girar (también por detrás) · rueda para acercar · toca la bola para reproducir · R centra · T reproductor</span>
 			<span id="model-status" role="status">Cargando portada…</span>
-			<span id="sound-status" role="status"></span>
 		</footer>
 		<script type="module" src="/src/main.js"></script>
 	</body>

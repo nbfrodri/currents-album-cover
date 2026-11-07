@@ -17,9 +17,10 @@ function span(doc, className, text, tag = "span") {
 	return el;
 }
 
-// Panel del reproductor: tema actual, controles, barra de progreso y tracklist clicable.
-// onState recibe cada cambio del reproductor (para que la portada reaccione).
-// Devuelve el lienzo del visualizador para que el bucle de render lo dibuje.
+// Panel del reproductor: tema actual, controles, barra de progreso y tracklist clicable. Se abre
+// solo al empezar un tema; se puede minimizar a una barra o cerrar (y no vuelve a abrirse solo
+// hasta el siguiente tema). onState recibe cada cambio del reproductor (para que la portada
+// reaccione). Devuelve setOpen y el lienzo del visualizador para el bucle de render.
 export function mountPanel(doc, player, tracks, onState) {
 	const $ = (selector) => doc.querySelector(selector);
 	const panel = $("#tracklist");
@@ -33,6 +34,18 @@ export function mountPanel(doc, player, tracks, onState) {
 	const canvas = $("#viz");
 	const volumeInput = $("#volume");
 	const muteButton = $("#mute");
+	const minButton = $("#player-min");
+
+	const setOpen = (open) => (panel.hidden = !open);
+	let minimized = false;
+	function setMinimized(value) {
+		minimized = value;
+		panel.classList.toggle("minimized", value);
+		minButton.setAttribute("aria-expanded", String(!value));
+		minButton.setAttribute("aria-label", value ? "Desplegar el reproductor" : "Minimizar el reproductor");
+	}
+	minButton.addEventListener("click", () => setMinimized(!minimized));
+	$("#player-close").addEventListener("click", () => setOpen(false));
 	$("#album-total").textContent = `${tracks.length} temas · ${formatTime(tracks.reduce((sum, t) => sum + seconds(t.time), 0))}`;
 
 	const trackButtons = tracks.map((track, i) => {
@@ -47,7 +60,12 @@ export function mountPanel(doc, player, tracks, onState) {
 	});
 
 	let seeking = false;
+	let shownFor = null; // tema para el que ya se abrió solo: cerrado, sigue cerrado hasta otro
 	player.onChange((state) => {
+		if (state.playing && state.index !== shownFor) {
+			shownFor = state.index;
+			setOpen(true);
+		}
 		panel.classList.toggle("playing", state.playing);
 		playButton.setAttribute("aria-label", state.playing ? "Pausar" : "Reproducir");
 		nowLabel.textContent = `${state.playing ? "Sonando" : "En pausa"} · ${String(state.index + 1).padStart(2, "0")}`;
@@ -88,5 +106,12 @@ export function mountPanel(doc, player, tracks, onState) {
 	muteButton.addEventListener("click", () => player.toggleMute());
 	player.setVolume(savedVolume());
 
-	return { context: canvas.getContext("2d"), width: canvas.width, height: canvas.height };
+	// abre el reproductor minimizado si estaba cerrado (al tocar la bola): no tapa la portada
+	function reveal() {
+		if (!panel.hidden) return;
+		setMinimized(true);
+		setOpen(true);
+	}
+
+	return { setOpen, reveal, context: canvas.getContext("2d"), width: canvas.width, height: canvas.height };
 }

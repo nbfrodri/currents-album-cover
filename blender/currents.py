@@ -44,7 +44,7 @@ PERIOD = 1 / 100  # separación entre rayas en unidades de psi
 GAP = 0.014  # medio hueco central (psi) por donde pasa la estela
 STRIPE_WIDTH = 0.0062  # ancho de cada raya lila (imagen)
 STRIPE_HEIGHT = 0.0022  # grosor de cada raya (imagen)
-TURBULENCE = 1.0  # intensidad del arrastre dentro de los remolinos
+TURBULENCE = 1.15  # intensidad del arrastre dentro de los remolinos
 GRID = 860  # resolución de la rejilla sobre la que se trazan las curvas de nivel
 WAVE_LIFT = 0.018  # amplitud en altura de las ondas (imagen): relieve visible al girar
 SIDES = 8
@@ -393,31 +393,27 @@ def build_back(size):
 	z = -BACK_DEPTH * 2 - 0.002
 	orange = material("BackTitle", TITLE_ORANGE, 0.0, 0.5, emission=1.0)
 	lilac = material("BackLilac", LILAC_NEAR, 0.0, 0.5, emission=0.6)
-	red = material("BackRed", RED, 0.0, 0.5, emission=0.8)
 
-	def at(u, v, dz=0.0):
-		return (-u, v, z - dz)
+	def at(u, v):
+		return (-u, v, z)
 
 	parts = [(add_text("TAME IMPALA", at(-0.93, 0.84), size, "LEFT", True), orange),
 		(add_text("CURRENTS", at(0.93, 0.84), size, "RIGHT", True), orange)]
 	for k, (title, time) in enumerate(TRACKS):
 		v = BACK_ROWS["top"] - k * BACK_ROWS["step"]
 		parts.append((add_text(f"{k + 1:02d}", at(-BACK_ROWS["half"], v), size * 0.75, "LEFT", True), lilac))
+		if k == 0:
+			cap = parts[-1][0].dimensions.y  # alto de las cifras ≈ mayúsculas, sobre la línea base
 		parts.append((add_text(title.upper(), at(-0.7, v), size * 0.75, "LEFT", True), orange))
 		parts.append((add_text(time, at(BACK_ROWS["half"], v), size * 0.75, "RIGHT", True), lilac))
 
-	bm = bmesh.new()  # banda de rayas lila abajo, cruzada por el hilo rojo
+	bm = bmesh.new()  # banda de rayas lila abajo
 	for k in range(22):
 		v = -0.5 - k * 0.021
 		quad = [bm.verts.new(at(u, v + dv)) for u, dv in ((-1, 0), (1, 0), (1, -0.011), (-1, -0.011))]
 		bm.faces.new(quad)
 	stripes = finish_mesh("BackStripes", bm, lilac)
-	bm = bmesh.new()
-	# el hilo rojo, apenas por fuera de las rayas para que no se peleen en profundidad
-	line = [bm.verts.new(at(u, v, 0.001)) for u, v in ((-1, -0.62), (1, -0.9), (1, -0.892), (-1, -0.612))]
-	bm.faces.new(line)
-	thread = finish_mesh("BackThread", bm, red)
-	parts += [(stripes, lilac), (thread, red)]
+	parts.append((stripes, lilac))
 
 	for obj, mat in parts:
 		obj.data.materials.clear()
@@ -430,7 +426,7 @@ def build_back(size):
 	back = bpy.context.active_object
 	back.name = back.data.name = "BackArt"
 	# la web hace clicables las filas: dónde están, en el espacio del modelo glTF (y = altura)
-	back["track_rows"] = {**BACK_ROWS, "count": len(TRACKS), "y": z}
+	back["track_rows"] = {**BACK_ROWS, "count": len(TRACKS), "y": z, "cap": round(cap, 4)}
 	bm = bmesh.new()  # todas las caras hacia -Z, para que el reverso se vea desde detrás
 	bm.from_mesh(back.data)
 	for f in bm.faces:
