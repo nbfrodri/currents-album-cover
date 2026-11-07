@@ -78,6 +78,11 @@ blender/currents.py   generador procedural + exportación GLB
 public/models/        modelo exportado y panorámica del reflejo
 public/draco/         decodificador Draco
 src/main.js           escena, interacción y bucle
+src/panel.js          panel del reproductor y tracklist
+src/player.js         reproductor (MP3 local o preview) y analizador
+src/tracks.js         datos del disco
+src/visualizer.js     visualizador de rayas
+src/waves.js          shaders inyectados: ondas, pulso y estela
 src/audio.js          banda sonora ambiental procedural
 src/shaders.js        shader de la capa de brillo
 ```

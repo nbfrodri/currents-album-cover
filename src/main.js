@@ -4,9 +4,11 @@ import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { createAmbient } from "./audio.js";
 import { createPlayer } from "./player.js";
+import { mountPanel } from "./panel.js";
 import { glareShader } from "./shaders.js";
-import { TRACKS, formatTime, seconds } from "./tracks.js";
+import { TRACKS } from "./tracks.js";
 import { drawVisualizer } from "./visualizer.js";
+import { addWaves, trailUniforms, trailWaves, waveUniforms } from "./waves.js";
 
 const MAX_TILT = { x: 0.35, y: 0.5 }; // radianes
 const COVER = 2; // la portada mide 2x2 (igual que en Blender)
@@ -118,57 +120,6 @@ ballEnv.colorSpace = THREE.SRGBColorSpace;
 const parts = { ball: null, body: null, stripes: null, trail: null, TitleBand: null, TitleAlbum: null };
 let model = null;
 
-// Uniformes compartidos por los shaders inyectados: ondas al pasar el ratón, pulso con los graves
-// y la estela que se tiñe con el tema y avanza con su progreso
-const waveUniforms = {
-	uTime: { value: 0 },
-	uPointer: { value: new THREE.Vector3(9, 0, 9) }, // en el espacio del modelo
-	uHover: { value: 0 },
-	uBass: { value: 0 },
-};
-const trailUniforms = {
-	uTint: { value: new THREE.Color(TRACKS[0].tint) },
-	uProgress: { value: 0 },
-	uActive: { value: 0 },
-	uRange: { value: new THREE.Vector2(0, 1) },
-};
-
-// Desplazamiento en altura (y del modelo): onda alrededor del puntero y las crestas suben con los graves
-const WAVE_VERTEX = `
-	float lifted = max(transformed.y, 0.0);
-	transformed.y += lifted * uBass * 1.4;
-	float d = distance(transformed.xz, uPointer.xz);
-	transformed.y += uHover * 0.022 * sin(d * 55.0 - uTime * 7.0) * exp(-d * d * 28.0);
-`;
-
-function addWaves(material, extra = {}) {
-	material.onBeforeCompile = (shader) => {
-		Object.assign(shader.uniforms, waveUniforms, extra.uniforms);
-		shader.vertexShader = shader.vertexShader
-			.replace("#include <common>", `#include <common>\nuniform float uTime, uHover, uBass;\nuniform vec3 uPointer;\n${extra.vertexHead ?? ""}`)
-			.replace("#include <begin_vertex>", `#include <begin_vertex>\n${WAVE_VERTEX}\n${extra.vertexBody ?? ""}`);
-		if (extra.fragment) extra.fragment(shader);
-	};
-}
-
-// La estela: el tema que suena la tiñe, y una cabeza brillante la recorre según el progreso
-function trailWaves(material) {
-	addWaves(material, {
-		uniforms: trailUniforms,
-		vertexHead: "varying float vAlong;",
-		vertexBody: "vAlong = uv.x;",
-		fragment(shader) {
-			shader.fragmentShader = shader.fragmentShader
-				.replace("#include <common>", "#include <common>\nuniform vec3 uTint;\nuniform float uProgress, uActive;\nuniform vec2 uRange;\nvarying float vAlong;")
-				.replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, uTint, 0.45 * uActive);")
-				.replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
-	float head = mix(uRange.x, uRange.y, uProgress);
-	float glow = exp(-pow((vAlong - head) * 16.0, 2.0));
-	totalEmissiveRadiance += uActive * (uTint * glow * 2.5 + diffuseColor.rgb * step(vAlong, head) * 0.3);`);
-		},
-	});
-}
-
 const loader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath("/draco/"));
 const modelStatus = document.querySelector("#model-status");
 loader.load("/models/currents.glb", (gltf) => {
@@ -226,68 +177,14 @@ soundButton.addEventListener("click", toggleSound);
 
 // Reproductor y tracklist
 const player = createPlayer(TRACKS);
-const $ = (selector) => document.querySelector(selector);
-const playerPanel = $("#tracklist");
-const playButton = $("#play");
-const nowLabel = $("#now-label");
-const nowTitle = $("#now-title");
-const seekInput = $("#seek");
-const timeCurrent = $("#time-current");
-const timeTotal = $("#time-total");
-const sourceNote = $("#audio-source");
-const vizCanvas = $("#viz");
-const viz = vizCanvas.getContext("2d");
-$("#album-total").textContent = `${TRACKS.length} temas · ${formatTime(TRACKS.reduce((sum, t) => sum + seconds(t.time), 0))}`;
-
-function span(className, text, tag = "span") {
-	const el = document.createElement(tag);
-	el.className = className;
-	el.textContent = text;
-	return el;
-}
-const trackButtons = TRACKS.map((track, i) => {
-	const button = document.createElement("button");
-	button.type = "button";
-	button.append(span("n", String(i + 1).padStart(2, "0")), span("t", track.title), span("", track.time, "time"));
-	button.addEventListener("click", () => player.play(i));
-	const item = document.createElement("li");
-	item.append(button);
-	$("#tracks").append(item);
-	return button;
-});
-
-let started = false;
-let seeking = false;
-player.onChange((state) => {
+let started = false; // la estela solo se tiñe cuando ya ha sonado algo
+const viz = mountPanel(document, player, TRACKS, (state) => {
 	started ||= state.playing;
-	const track = TRACKS[state.index];
-	playerPanel.classList.toggle("playing", state.playing);
-	playButton.setAttribute("aria-label", state.playing ? "Pausar" : "Reproducir");
-	nowLabel.textContent = `${state.playing ? "Sonando" : "En pausa"} · ${String(state.index + 1).padStart(2, "0")}`;
-	nowTitle.textContent = track.title;
-	trackButtons.forEach((button, i) => button.setAttribute("aria-current", String(i === state.index)));
+	trailUniforms.uTint.value.set(TRACKS[state.index].tint);
 	const duration = Number.isFinite(state.duration) ? state.duration : 0;
-	seekInput.max = duration;
-	if (!seeking) seekInput.value = state.current;
-	seekInput.style.setProperty("--progress", `${duration ? (state.current / duration) * 100 : 0}%`);
-	timeCurrent.textContent = formatTime(state.current);
-	timeTotal.textContent = formatTime(duration);
-	sourceNote.textContent = state.failed
-		? "No se pudo cargar el audio. Comprueba la conexión."
-		: state.source === "preview" ? "Preview oficial de 30 s · pon tus MP3 en public/audio para el tema completo" : "";
-	trailUniforms.uTint.value.set(track.tint);
 	trailUniforms.uProgress.value = duration ? state.current / duration : 0;
 	if (state.playing && ambient.playing) toggleSound();
 });
-playButton.addEventListener("click", () => player.toggle());
-$("#prev").addEventListener("click", () => player.prev());
-$("#next").addEventListener("click", () => player.next());
-seekInput.addEventListener("input", () => {
-	seeking = true;
-	player.seek(Number(seekInput.value));
-	seeking = false;
-});
-
 const tracklist = document.querySelector("#tracklist");
 const tracklistButton = document.querySelector("#tracklist-toggle");
 function setTracklist(open) {
@@ -489,7 +386,7 @@ renderer.setAnimationLoop(() => {
 	trailUniforms.uActive.value = THREE.MathUtils.lerp(trailUniforms.uActive.value, started ? 1 : 0, 0.05);
 	if (parts.stripes) parts.stripes.material.emissiveIntensity = mid * 0.1;
 	if (parts.ball) parts.ball.scale.setScalar(1 + waveUniforms.uBass.value * 0.06);
-	if (!playerPanel.hidden) drawVisualizer(viz, vizCanvas.width, vizCanvas.height, freq, t);
+	if (!tracklist.hidden) drawVisualizer(viz.context, viz.width, viz.height, freq, t);
 
 	// el entorno del reflejo gira con la portada
 	if (parts.ball) parts.ball.material.envMapRotation.copy(cover.rotation);

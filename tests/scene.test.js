@@ -5,6 +5,8 @@ import vm from "node:vm";
 import * as THREE from "three";
 import * as shaders from "../src/shaders.js";
 import * as tracks from "../src/tracks.js";
+import * as panel from "../src/panel.js";
+import * as waves from "../src/waves.js";
 
 function setup(orientation) {
 	const listeners = new Map();
@@ -62,7 +64,7 @@ function setup(orientation) {
 			setTilt() {}, playing: false,
 			async toggle() { this.playing = !this.playing; stats.toggles++; return this.playing; },
 		}),
-		...tracks,
+		...tracks, ...panel, ...waves,
 		drawVisualizer() {},
 		createPlayer() {
 			let listener = null, playing = false;

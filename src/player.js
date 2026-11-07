@@ -2,6 +2,26 @@ import { localSource } from "./tracks.js";
 
 const RESTART_AFTER = 3; // segundos: "anterior" reinicia el tema si ya ha avanzado más
 
+// Graves, medios y agudos (0..1) de un espectro de bytes
+function bandLevels(freq) {
+	const band = (from, to) => {
+		let sum = 0;
+		for (let k = from; k < to; k++) sum += freq[k];
+		return sum / (to - from) / 255;
+	};
+	const n = freq.length;
+	return { bass: band(1, 8), mid: band(8, Math.floor(n * 0.4)), high: band(Math.floor(n * 0.4), n), freq };
+}
+
+function createAnalyser(context, audio) {
+	const analyser = context.createAnalyser();
+	analyser.fftSize = 512;
+	analyser.smoothingTimeConstant = 0.8;
+	context.createMediaElementSource(audio).connect(analyser);
+	analyser.connect(context.destination);
+	return analyser;
+}
+
 // Reproductor del disco: un solo <audio> que prueba primero el MP3 local y, si falla, el preview.
 // El analizador (Web Audio) se crea con la primera reproducción, que ya es un gesto del usuario.
 export function createPlayer(tracks, { createAudio = () => new Audio(), createContext = () => new AudioContext() } = {}) {
@@ -46,11 +66,7 @@ export function createPlayer(tracks, { createAudio = () => new Audio(), createCo
 	function connect() {
 		if (context) return;
 		context = createContext();
-		analyser = context.createAnalyser();
-		analyser.fftSize = 512;
-		analyser.smoothingTimeConstant = 0.8;
-		context.createMediaElementSource(audio).connect(analyser);
-		analyser.connect(context.destination);
+		analyser = createAnalyser(context, audio);
 		freq = new Uint8Array(analyser.frequencyBinCount);
 	}
 
@@ -97,17 +113,11 @@ export function createPlayer(tracks, { createAudio = () => new Audio(), createCo
 		emit();
 	}
 
-	// Niveles 0..1 de graves, medios y agudos, y el espectro completo para el visualizador
+	// Niveles y espectro completo para la portada y el visualizador
 	function levels() {
 		if (!analyser) return { bass: 0, mid: 0, high: 0, freq: null };
 		analyser.getByteFrequencyData(freq);
-		const band = (from, to) => {
-			let sum = 0;
-			for (let k = from; k < to; k++) sum += freq[k];
-			return sum / (to - from) / 255;
-		};
-		const n = freq.length;
-		return { bass: band(1, 8), mid: band(8, Math.floor(n * 0.4)), high: band(Math.floor(n * 0.4), n), freq };
+		return bandLevels(freq);
 	}
 
 	return {
