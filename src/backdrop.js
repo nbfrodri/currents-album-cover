@@ -25,15 +25,15 @@ const FRAGMENT = `
 		float c = dot(p, across);
 		float t = uTime * 0.5; // lento: un fondo que se mueve deprisa marea
 		// ondas largas y lentas en todo el fondo; los graves las amplían
-		float amp = 0.04 + uBass * 0.05;
+		float amp = 0.04 + uBass * 0.07;
 		float shift = amp * (0.6 * sin(a * 2.6 + c * 1.2 + t * 0.35) + 0.4 * sin(a * 4.3 - c * 2.0 - t * 0.27));
 		// una franja de rayas derretidas en meandros redondos (como la estela bajo la bola) que
 		// deriva despacio por la pantalla
 		float band = smoothstep(0.55, 0.95, 0.5 + 0.5 * sin(c * 2.2 - a * 0.6 + t * 0.06));
-		shift += band * (0.03 + uBass * 0.02) * sin(a * 14.0 + 3.0 * sin(c * 3.0 + t * 0.2) + t * 0.5);
+		shift += band * (0.03 + uBass * 0.028) * sin(a * 14.0 + 3.0 * sin(c * 3.0 + t * 0.2) + t * 0.5);
 		// onda suave del último golpe, que sale del centro
 		float ring = exp(-pow((length(p) - uBeatAge * 0.6) * 6.0, 2.0)) * exp(-uBeatAge * 1.8);
-		shift += ring * 0.012;
+		shift += ring * 0.016;
 		// rayas con volumen sobre azul grisáceo: surcos más oscuros, cresta clara.
 		// No se deslizan (solo ondulan) y no son demasiado finas: así no parpadean en muaré
 		float profile = 0.5 + 0.5 * sin((c + shift) * 120.0);
@@ -51,8 +51,8 @@ const FRAGMENT = `
 		vec3 light = vec3(0.205, 0.27, 0.361);
 		float groove = (1.0 - body) * (0.22 + 0.06 * band) * (0.7 + 0.3 * (1.0 - shade));
 		vec3 color = mix(slate, shadow, groove * 1.6);
-		color = mix(color, light, crest * (0.12 + 0.2 * uMid + 0.15 * uGlow + 0.3 * ring) * (0.5 + 0.5 * shade));
-		color *= mix(0.82, 1.0, vignette) * (1.0 + 0.06 * halo * uGlow);
+		color = mix(color, light, crest * (0.12 + 0.28 * uMid + 0.22 * uGlow + 0.4 * ring) * (0.5 + 0.5 * shade));
+		color *= mix(0.82, 1.0, vignette) * (1.0 + 0.09 * halo * uGlow);
 		gl_FragColor = vec4(color, 1.0);
 		#include <colorspace_fragment>
 	}
