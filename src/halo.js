@@ -22,8 +22,8 @@ const FRAGMENT = `
 		#include <clipping_planes_fragment>
 		float r = length(vUv - 0.5) * 2.0; // 0 en el centro, 1 en el borde
 		float glow = exp(-r * r * 9.0);
-		float ring = exp(-pow((r - 0.3 - uAge * 0.8) * 7.0, 2.0)) * exp(-uAge * 2.5);
-		float alpha = (glow * uStrength + ring * 0.35) * smoothstep(1.0, 0.75, r);
+		float ring = exp(-pow((r - 0.3 - uAge * 0.8) * 10.0, 2.0)) * exp(-uAge * 2.5); // fino: discreto
+		float alpha = (glow * uStrength + ring * 0.55) * smoothstep(1.0, 0.75, r);
 		gl_FragColor = vec4(vec3(0.79, 0.68, 0.95) * alpha, 1.0);
 	}
 `;
