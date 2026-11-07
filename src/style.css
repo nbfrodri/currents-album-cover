@@ -755,14 +755,15 @@ input:focus-visible {
 	width: 140px;
 	height: 2px;
 	border-radius: 1px;
-	background: rgb(230 220 245 / 0.18);
+	background: rgb(201 174 242 / 0.2);
 	overflow: hidden;
 }
 
+/* morado de las rayas de la portada: de la sombra violeta al lila con luz */
 .loader-bar span {
 	display: block;
 	height: 100%;
-	background: var(--text);
+	background: linear-gradient(90deg, #7a4fb8, var(--lilac));
 	transform-origin: 0 50%;
 	scale: var(--loaded, 0) 1;
 	transition: scale 0.4s ease;
