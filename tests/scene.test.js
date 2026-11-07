@@ -127,12 +127,12 @@ test("la carga refleja los bytes reales, se completa y conserva el error legible
 	assert.ok(!failed.elements.get("#loader").classes.has("done"));
 });
 
-test("la entrada espera al dibujo y gira con calma después del fundido inicial", () => {
+test("la entrada espera un mínimo y gira con calma después del fundido inicial", () => {
 	const app = setup();
 	app.preference.change({ matches: false });
-	app.run("let clock = startedAt; performance = { now: () => clock }; model = new THREE.Group(); clock += 1800; renderer.frame()");
+	app.run("let clock = startedAt; performance = { now: () => clock }; model = new THREE.Group(); clock += 800; renderer.frame()");
 	assert.ok(!app.elements.get("#loader").classes.has("done"));
-	app.run("clock = startedAt + 2600; renderer.frame()");
+	app.run("clock = startedAt + 1400; renderer.frame()");
 	assert.ok(app.elements.get("#loader").classes.has("done"));
 	const initial = app.run("cover.rotation.y");
 	app.run("clock += 150; renderer.frame()");

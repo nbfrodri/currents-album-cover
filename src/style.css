@@ -721,7 +721,7 @@ input:focus-visible {
 	}
 }
 
-/* Pantalla de carga: una pequeña portada que se dibuja y cede el paso al relieve 3D. */
+/* Pantalla de carga: solo una bola cromada que respira, una línea de progreso y el texto */
 .loader {
 	position: fixed;
 	inset: 0;
@@ -730,11 +730,10 @@ input:focus-visible {
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	gap: 22px;
-	padding: 24px;
-	overflow: hidden;
-	background: radial-gradient(ellipse at 50% 42%, #252633 0%, var(--slate) 82%);
-	transition: opacity 1.1s ease, visibility 0s linear 1.1s;
+	gap: 28px;
+	padding: 16px;
+	background: var(--slate);
+	transition: opacity 1s ease, visibility 0s linear 1s;
 }
 
 .loader.done {
@@ -743,156 +742,69 @@ input:focus-visible {
 	pointer-events: none;
 }
 
-.loader-panel {
-	position: relative;
-	flex: none;
-	width: min(340px, 100%, 48svh);
-	aspect-ratio: 1;
-	background: var(--ink);
-	box-shadow: 0 0 0 1px rgb(201 174 242 / 0.14), 0 24px 70px rgb(7 3 11 / 0.35);
-	transition: opacity 0.7s ease;
-}
-
-.loader.done .loader-panel {
-	opacity: 0;
-}
-
-.loader-art {
-	display: block;
-	width: 100%;
-	height: 100%;
-	overflow: hidden;
-}
-
-.loader-stripes {
-	opacity: 0.58;
-	animation: loader-lines 1.8s cubic-bezier(0.25, 0.1, 0.25, 1) both;
-}
-
-.loader-signal {
-	stroke-dasharray: 1;
-	animation: loader-draw 1.3s 0.2s ease-in-out both;
-}
-
-.loader-trail {
-	animation: loader-ripple 9s 2.4s ease-in-out infinite;
-}
-
-.loader-trail path {
-	stroke-dasharray: 1;
-	animation: loader-draw 1.1s 1.1s ease-out both;
-}
-
 .loader-ball {
-	transform-box: fill-box;
-	transform-origin: center;
-	animation: loader-chrome 1.6s ease-out both;
-}
-
-.loader-title {
-	position: absolute;
-	inset: 16px 14px auto;
-	display: flex;
-	justify-content: space-between;
-	gap: 12px;
-	font-size: clamp(0.52rem, 1.6vw, 0.58rem);
-	font-weight: 700;
-	letter-spacing: 0.14em;
-	text-transform: uppercase;
-	color: var(--gold);
-}
-
-.loader-title span {
-	background: var(--ink); /* mantiene el contraste donde cruza la línea roja */
-}
-
-.loader-label {
-	width: min(340px, 100%);
-	min-height: 3.6em; /* reserva dos líneas y su redondeo subpíxel para el mensaje de error */
-	font-size: 0.7rem;
-	line-height: 1.6;
-	letter-spacing: 0.06em;
-	color: var(--text);
-	text-align: center;
-	text-wrap: balance;
+	width: 76px;
+	height: 76px;
+	border-radius: 50%;
+	background: radial-gradient(circle at 34% 28%, #fff 0%, #e5e4ed 14%, #9895a5 36%, #262432 56%, #bcb9c8 74%, #18141f 100%);
+	box-shadow: 0 18px 30px -12px rgb(7 3 11 / 0.55);
+	animation: loader-breathe 3.2s ease-in-out infinite;
 }
 
 .loader-bar {
-	flex: none;
-	width: min(340px, 100%, 48svh);
-	height: 3px;
-	margin-top: -14px;
+	width: 140px;
+	height: 2px;
+	border-radius: 1px;
+	background: rgb(230 220 245 / 0.18);
 	overflow: hidden;
-	background: rgb(230 220 245 / 0.22);
 }
 
 .loader-bar span {
 	display: block;
 	height: 100%;
-	background: var(--trail);
+	background: var(--text);
 	transform-origin: 0 50%;
 	scale: var(--loaded, 0) 1;
-	transition: scale 0.35s ease-out;
+	transition: scale 0.4s ease;
 }
 
-/* En caso de error se conserva la ilustración inmóvil y el mensaje queda en primer plano. */
-.loader.failed .loader-art *,
-.loader.done .loader-art * {
-	animation-play-state: paused;
+.loader-label {
+	margin-top: -14px;
+	font-size: 0.66rem;
+	letter-spacing: 0.22em;
+	text-transform: uppercase;
+	color: var(--text);
+	text-align: center;
+	max-width: 32ch;
+	line-height: 1.6;
+}
+
+.loader.failed .loader-ball {
+	animation: none;
+	opacity: 0.45;
 }
 
 .loader.failed .loader-bar {
-	visibility: hidden;
+	display: none;
 }
 
-.loader.failed .loader-bar span {
-	transition: none;
+.loader.failed .loader-label {
+	text-transform: none;
+	letter-spacing: 0.04em;
 }
 
-@keyframes loader-lines {
-	from {
-		clip-path: inset(0 100% 0 0);
-	}
-	to {
-		clip-path: inset(0);
-	}
-}
-
-@keyframes loader-draw {
-	from {
-		stroke-dashoffset: 1;
-	}
-	to {
-		stroke-dashoffset: 0;
-	}
-}
-
-/* Solo una oscilación lateral de dos píxeles: sin pulsos de brillo ni giros continuos. */
-@keyframes loader-ripple {
+@keyframes loader-breathe {
 	0%,
 	100% {
-		transform: translateX(0);
+		scale: 1;
 	}
 	50% {
-		transform: translateX(2px);
-	}
-}
-
-@keyframes loader-chrome {
-	from {
-		opacity: 0;
-		transform: scale(0.94);
-	}
-	to {
-		opacity: 1;
-		transform: scale(1);
+		scale: 1.06;
 	}
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.loader,
-	.loader * {
-		animation: none !important;
-		transition: none !important;
+	.loader-ball {
+		animation: none;
 	}
 }

@@ -141,9 +141,9 @@ function placeBackMarker(index) {
 }
 let model = null;
 
-// Pantalla de carga: las líneas llegan a la bola y la estela se despliega antes del fundido.
-// La portada toma el relevo con un giro suave; con movimiento reducido no se fuerza la espera.
-const LOADER_MIN = 2.4; // segundos para completar el dibujo, incluso con el modelo en caché
+// Pantalla de carga: una bola cromada que respira mientras llega el modelo. Después la portada
+// toma el relevo con un giro suave; con movimiento reducido no se fuerza la espera.
+const LOADER_MIN = 1.2; // segundos: que la carga no sea un parpadeo con el modelo en caché
 const INTRO = 3.2; // segundos de giro pausado, después de los primeros 0,2 s del fundido
 const loadingScreen = document.querySelector("#loader");
 const loadingLabel = document.querySelector("#loader-label");
