@@ -28,7 +28,7 @@ Para probarlo en el móvil (misma red Wi‑Fi): `npx vite --host` y abrir la IP 
 ## Técnicas
 
 - **Toda la portada se hace en Blender** (`blender/currents.py`), tomando como referencia la portada original: forma, colores, materiales y texto. La web solo carga el modelo y añade la interacción.
-	- **Rayas**: ~100 rayas lila como tubos planos que siguen las *líneas de corriente* de un flujo potencial alrededor de la bola, `ψ = d⊥ · (1 − R² / r²)` (se resuelve `ψ = cte` por bisección). Son rectas hasta la bola; detrás, ondas y ruido las deforman en el plano y en altura. Su color (lila que se oscurece arriba a la derecha) va en los vértices.
+	- **Rayas**: tubos planos lila trazados como curvas de nivel de un flujo potencial (`blender/flow.py`, marching squares). Detrás de la bola, remolinos locales forman eses, horquillas y gotas dentro de una estela diagonal hacia abajo a la derecha; fuera de ella las rayas permanecen tranquilas. El ancho se adapta a la separación y curvatura. Los colores de vértice incluyen crestas claras, lados oscuros, sombras en los pliegues y el hoyo, y una caída a casi negro arriba a la derecha; no se usan texturas de imagen.
 	- **Estela**: una sola línea por el hueco central (`ψ ≈ 0`) a ras de las rayas: hilo rojo fino, mancha rosa al llegar a la bola, pasa por debajo y sale como cola ondulada naranja y amarilla.
 	- **Bola**: cromo gris satinado (metálico con rugosidad), hundida en un hoyo de la superficie.
 	- **Texto**: "TAME IMPALA" y "CURRENTS" en naranja, flotando por delante de la superficie.

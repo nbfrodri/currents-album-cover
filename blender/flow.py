@@ -1,20 +1,13 @@
-"""Rayas de 'Currents' como curvas de nivel de un campo de corriente (numpy, sin bpy).
+"""Rayas como curvas de nivel de un flujo con remolinos en la estela diagonal.
 
-El campo es la función de corriente de un flujo potencial alrededor de la bola,
-psi = d_perp * (1 - R^2 / r^2), más unos meandros que solo existen en la franja inferior de la
-portada (bajo una línea casi horizontal que pasa por la bola, medida sobre el original). Los
-meandros desplazan las rayas a lo ancho con una onda corta a lo largo del flujo y una fase que
-cambia despacio: las rayas vecinas ondulan juntas, y donde la onda es más fuerte que el flujo se
-pliegan en eses, bucles y gotas. Las curvas de nivel de un campo suave nunca se cruzan.
-En el canal central (psi ≈ 0) la onda es larga y suave: por ahí pasa la cola de la estela.
-Coordenadas "de imagen" (0..1, y hacia abajo).
+Las rotaciones locales arrastran juntas las rayas vecinas: forman eses y horquillas
+redondas, sin la repetición de una onda sinusoidal. El canal de la cola pertenece al
+mismo campo. Fuera del abanico detrás de la bola se conserva el flujo potencial.
+Coordenadas de imagen (0..1, y hacia abajo); numpy, sin dependencia de Blender.
 """
 import numpy as np
 
 TAU = 2 * np.pi
-WAVELENGTH = 0.075  # meandros de la franja inferior (imagen)
-TAIL_WAVELENGTH = 0.32  # eses suaves de la cola
-CHANNEL = 0.035  # medio ancho del canal tranquilo alrededor de la cola (unidades de psi)
 
 
 def smoothstep(e0, e1, x):
@@ -23,12 +16,27 @@ def smoothstep(e0, e1, x):
 
 
 class Flow:
+	# Centro longitudinal/lateral, radios y giro de cada pliegue de pintura.
+	# Los signos alternos producen horquillas y gotas, no una corrugación periódica.
+	CURLS = (
+		(0.075, -0.115, 0.080, 0.055, 2.2),
+		(0.14, 0.105, 0.075, 0.058, -2.5),
+		(0.23, -0.125, 0.095, 0.075, -2.9),
+		(0.29, 0.125, 0.090, 0.068, 3.1),
+		(0.35, -0.255, 0.085, 0.070, 2.8),
+		(0.43, -0.115, 0.090, 0.075, 3.2),
+		(0.46, 0.255, 0.110, 0.080, -3.0),
+		(0.51, 0.110, 0.095, 0.072, -3.2),
+		(0.59, -0.265, 0.105, 0.090, -3.2),
+		(0.64, -0.080, 0.100, 0.075, 3.0),
+	)
+
 	def __init__(self, ball, flow_r, turbulence, wave_lift):
 		self.ball = np.asarray(ball, dtype=float)
-		self.dir = self.ball / np.linalg.norm(self.ball)  # de la esquina (0, 0) al centro de la bola
+		self.dir = self.ball / np.linalg.norm(self.ball)
 		self.perp = np.array([-self.dir[1], self.dir[0]])
 		self.flow_r = flow_r
-		self.turbulence = turbulence  # amplitud máxima de los meandros (unidades de psi)
+		self.turbulence = turbulence
 		self.wave_lift = wave_lift
 
 	def along_across(self, x, y):
@@ -39,45 +47,64 @@ class Flow:
 		a, c = self.along_across(x, y)
 		return c * (1 - self.flow_r ** 2 / np.maximum(a * a + c * c, 1e-9))
 
-	@staticmethod
-	def depth(x, y):
-		"""Cuánto se ha entrado en la franja ondulada: 0 por encima de la línea que va de
-		(0, 0.6) a (1, 0.5) en el original, y crece hacia abajo."""
-		return y - (0.6 - 0.1 * x)
-
 	def mask(self, x, y):
-		"""0 en la parte recta; 1 en la franja ondulada, con meandros que crecen hacia abajo."""
-		d = self.depth(x, y)
-		return smoothstep(-0.03, 0.06, d) * (0.35 + 0.65 * smoothstep(0.0, 0.3, d))
+		"""Abanico diagonal: el lado inferior izquierdo sigue siendo tranquilo."""
+		a, c = self.along_across(x, y)
+		width = 0.10 + 0.48 * np.maximum(a, 0)
+		return smoothstep(-0.025, 0.11, a) * (1 - smoothstep(width, width + 0.09, np.abs(c)))
 
 	@staticmethod
-	def phase(x, y):
-		"""Fase lenta: rayas vecinas ondulan casi igual, pero cambia cada pocas rayas."""
-		return 6 * np.sin(8 * x + 2 * np.sin(6 * y)) + 4 * np.sin(10 * y - 5 * x + 1.0)
-
-	@staticmethod
-	def envelope(x, y):
-		"""Amplitud variable (0.35..1): unas zonas se pliegan en bucles y otras solo ondulan."""
-		return 0.675 + 0.325 * np.sin(7 * x - 3 * y + 2 * np.sin(5 * y + 1.3))
+	def tail(a):
+		"""Dos eses largas; la cola vuelve al eje que sale cerca de x=0.85."""
+		return 0.017 * smoothstep(0.07, 0.16, a) * np.sin((a - 0.10) * TAU / 0.20)
 
 	def base(self, x, y):
-		"""psi con las eses largas de la cola: su curva 0 es el camino de la estela."""
 		a, _ = self.along_across(x, y)
-		m = self.mask(x, y) * self.turbulence
-		return self.psi(x, y) + m * 0.6 * np.sin(TAU * a / TAIL_WAVELENGTH + 0.4 * self.phase(x, y))
+		return self.psi(x, y) - self.mask(x, y) * self.tail(a)
 
 	def field(self, x, y):
 		a, _ = self.along_across(x, y)
 		base = self.base(x, y)
-		phase = self.phase(x, y)
-		calm = smoothstep(0.004, CHANNEL, np.abs(base))  # 0 en el canal de la cola, 1 fuera
-		short = np.sin(TAU * a / WAVELENGTH + phase) + 0.5 * np.sin(TAU * a / (WAVELENGTH * 1.7) - 0.7 * phase)
-		return base + self.mask(x, y) * self.turbulence * self.envelope(x, y) * calm * short / 1.5
+		v = base
+		for ca, cc, ra, rc, angle in self.CURLS:
+			da, dc = (a - ca) / ra, (base - cc) / rc
+			theta = angle * np.exp(-1.4 * (da * da + dc * dc))
+			cs, sn = np.cos(theta), np.sin(theta)
+			v = v + rc * (da * sn + dc * (cs - 1))
+		# Se reserva un canal con signo constante: ninguna raya atraviesa la cola.
+		amplitude = 0.020 + 0.016 * smoothstep(0.10, 0.60, a)
+		v += amplitude * np.sin(48 * a + 2.5 * np.sin(19 * base)) + 0.008 * np.sin(73 * a - 27 * base + 1.3)
+		calm = smoothstep(0.022, 0.065, np.abs(base))
+		return base + self.mask(x, y) * calm * (v - base) * self.turbulence
 
 	def lift(self, x, y):
-		"""Altura de las ondas (imagen): lomas suaves, más largas que los meandros."""
-		a, _ = self.along_across(x, y)
-		return self.mask(x, y) * self.wave_lift * (0.5 + 0.5 * np.sin(TAU * a / (WAVELENGTH * 2.5) + 0.5 * self.phase(x, y)))
+		"""Relieve bajo y ancho: no convierte los pliegues en una superficie inclinada."""
+		a, c = self.along_across(x, y)
+		return self.mask(x, y) * self.wave_lift * (0.5 + 0.25 * np.sin(25 * a + 12 * c) + 0.25 * np.cos(34 * c - 8 * a))
+
+	def relief(self, points, period, width):
+		"""Ancho según separación real; sombra en pliegues, aglomeraciones y el hoyo."""
+		x, y = np.asarray(points).T
+		e = 0.0006
+		f = self.field(x, y)
+		fxp, fxm = self.field(x + e, y), self.field(x - e, y)
+		fyp, fym = self.field(x, y + e), self.field(x, y - e)
+		fx, fy = (fxp - fxm) / (2 * e), (fyp - fym) / (2 * e)
+		gradient = np.maximum(np.hypot(fx, fy), 0.15)
+		fxx, fyy = (fxp + fxm - 2 * f) / e ** 2, (fyp + fym - 2 * f) / e ** 2
+		fxy = (self.field(x + e, y + e) - self.field(x + e, y - e)
+			- self.field(x - e, y + e) + self.field(x - e, y - e)) / (4 * e ** 2)
+		curvature = np.abs(fxx * fy ** 2 - 2 * fxy * fx * fy + fyy * fx ** 2) / gradient ** 3
+		widths = np.minimum(width * 1.2, period * 0.64 / gradient)
+		widths = np.minimum(widths, 0.45 / np.maximum(curvature, 1))
+		fold = smoothstep(12, 95, curvature) * self.mask(x, y)
+		crowd = smoothstep(1.4, 4.5, gradient)
+		r = np.hypot(x - self.ball[0], y - self.ball[1])
+		pocket = np.exp(-((r - self.flow_r) / 0.055) ** 2)
+		a, c = self.along_across(x, y)
+		region = 0.88 + 0.12 * np.sin(12 * a + 7 * c) * np.cos(16 * c - 4 * a)
+		shade = region * (1 - 0.20 * fold) * (1 - 0.14 * crowd) * (1 - 0.36 * pocket)
+		return widths, shade
 
 
 # Marching squares: esquinas de cada celda v0 (i, j), v1 (i, j+1), v2 (i+1, j+1), v3 (i+1, j);
@@ -108,7 +135,12 @@ def contours(values, level):
 
 	links = {}
 	for i, j in zip(*np.nonzero((case > 0) & (case < 15))):
-		for ea, eb in SEGMENTS[case[i, j]]:
+		segments = SEGMENTS[case[i, j]]
+		if case[i, j] in (5, 10):
+			# Decisor asintótico: mantiene la misma topología entre niveles vecinos.
+			q = (v0[i, j] - level) * (v2[i, j] - level) - (v1[i, j] - level) * (v3[i, j] - level)
+			segments = ((0, 1), (2, 3)) if q > 0 else ((3, 0), (1, 2))
+		for ea, eb in segments:
 			a, b = edge_id(i, j, ea), edge_id(i, j, eb)
 			links.setdefault(a, []).append(b)
 			links.setdefault(b, []).append(a)

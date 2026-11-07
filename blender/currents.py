@@ -2,10 +2,10 @@
 
 Referencia: la portada original de Robert Beatty. Toda la portada se hace aquí (forma, color,
 materiales y texto); la web solo la carga y añade la interacción.
-- Stripes: ~100 rayas lila (tubos planos), curvas de nivel de un campo de corriente (blender/flow.py):
-  flujo potencial alrededor de la bola más unos meandros en la franja inferior. Rectas hasta la
+- Stripes: ~140 rayas lila (tubos planos), curvas de nivel de un campo de corriente (blender/flow.py):
+  flujo potencial alrededor de la bola más remolinos en su estela diagonal. Rectas hasta la
   bola y, por debajo, meandros psicodélicos que se pliegan en eses y gotas y suben en altura. El color (lila que se
-  oscurece arriba a la derecha) va en sus vértices.
+  oscurece arriba a la derecha, con luces de cresta y sombras en los pliegues) va en sus vértices.
 - Trail: una sola línea por el hueco central (psi = 0), a ras de las rayas: hilo rojo fino y recto,
   mancha rosa al llegar a la bola, pasa por debajo y sale como cola ondulada naranja y amarilla.
 - Ball: bola de cromo gris satinado hundida en un hoyo de la superficie.
@@ -28,7 +28,7 @@ import bpy
 import numpy as np
 from mathutils import Matrix, Vector
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__ if "__file__" in globals() else CURRENTS_PATH)))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(globals().get("CURRENTS_PATH") or __file__)))
 OUT = os.path.join(ROOT, "public", "models", "currents.glb")
 ENV_OUT = os.path.join(ROOT, "public", "models", "ball_env.jpg")
 FONT = os.path.join(ROOT, "blender", "fonts", "ArchivoExpanded-Bold.ttf")
@@ -40,14 +40,14 @@ BALL_R = 0.105  # imagen (la portada mide 1)
 DIR = BALL.normalized()  # trayectoria: de la esquina (0, 0) al centro de la bola
 PERP = Vector((-DIR.y, DIR.x))
 
-PERIOD = 1 / 70  # separación entre rayas en unidades de psi
-GAP = 0.008  # medio hueco central (psi) por donde pasa la estela
-STRIPE_WIDTH = 0.0088  # ancho de cada raya lila (imagen)
-STRIPE_HEIGHT = 0.0035  # grosor de cada raya (imagen)
-TURBULENCE = 0.042  # amplitud de los meandros de la franja inferior (unidades de psi: ~2 rayas)
-GRID = 640  # resolución de la rejilla sobre la que se trazan las curvas de nivel
-WAVE_LIFT = 0.055  # amplitud en altura de las ondas (imagen): relieve visible al girar
-SIDES = 6
+PERIOD = 1 / 100  # separación entre rayas en unidades de psi
+GAP = 0.014  # medio hueco central (psi) por donde pasa la estela
+STRIPE_WIDTH = 0.0062  # ancho de cada raya lila (imagen)
+STRIPE_HEIGHT = 0.0022  # grosor de cada raya (imagen)
+TURBULENCE = 1.0  # intensidad del arrastre dentro de los remolinos
+GRID = 860  # resolución de la rejilla sobre la que se trazan las curvas de nivel
+WAVE_LIFT = 0.018  # amplitud en altura de las ondas (imagen): relieve visible al girar
+SIDES = 8
 FLOW_R = BALL_R * 0.85  # radio del flujo: algo menor que la bola para que las rayas se peguen a ella
 DENT = 0.075  # profundidad del hoyo que hace la bola en la superficie (imagen)
 DENT_WIDTH = 0.11  # alcance del hoyo desde el centro de la bola (imagen)
@@ -64,8 +64,8 @@ DOMAIN_X = (-0.06, 1.06)
 DOMAIN_Y = (-0.06, 1.06)
 
 # Colores tomados de la portada original (sRGB)
-LILAC_NEAR = (0.8, 0.68, 0.95)
-LILAC_FAR = (0.2, 0.09, 0.3)
+LILAC_NEAR = (0.9, 0.75, 1.0)
+LILAC_FAR = (0.10, 0.035, 0.17)
 RED = (0.95, 0.08, 0.18)
 PINK = (1.0, 0.3, 0.55)
 ORANGE = (1.0, 0.55, 0.1)
@@ -91,6 +91,7 @@ def stripe_color(uv):
 	"""Lila que se oscurece hacia arriba a la derecha, como la superficie que se aleja del original."""
 	x, y = uv
 	far = smoothstep(0.35, 1.15, x * 0.75 + (1 - y) * 0.7)
+	far *= 1 - smoothstep(0.4, 0.95, y)
 	return mix(LILAC_NEAR, LILAC_FAR, far)
 
 
@@ -151,12 +152,18 @@ def clip_runs(points):
 	return [r for r in runs if len(r) > 2]
 
 
-def add_tube(bm, uv_layer, run, half_w, half_h, uv_of):
+def add_tube(bm, uv_layer, run, half_w, half_h, uv_of, colors=None):
 	"""Tubo de sección elíptica sobre la polilínea run = [(p_imagen, lift, extra), ...]."""
 	pts = [to_world(p, lift) for p, lift, _ in run]
+	closed = (pts[0] - pts[-1]).length < 1e-7
 	rings = []
+	col = None
+	if colors is not None:
+		col = bm.loops.layers.float_color.get("Col") or bm.loops.layers.float_color.new("Col")
 	for i, (p, _, extra) in enumerate(run):
-		t = pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]
+		before = (i - 1) % (len(pts) - 1) if closed else max(i - 1, 0)
+		after = (i + 1) % (len(pts) - 1) if closed else min(i + 1, len(pts) - 1)
+		t = pts[after] - pts[before]
 		t.z = 0
 		t.normalize()
 		n = Vector((-t.y, t.x, 0.0))
@@ -167,14 +174,23 @@ def add_tube(bm, uv_layer, run, half_w, half_h, uv_of):
 			ang = 2 * math.pi * k / SIDES
 			off = n * math.cos(ang) * hw + Vector((0, 0, math.sin(ang) * hh + hh))
 			ring.append(bm.verts.new(pts[i] + off))
-		rings.append((ring, uv_of(p, extra)))
+		# Luz de cresta horneada: persiste también bajo las luces de la web.
+		shades = []
+		if colors is not None:
+			for k in range(SIDES):
+				light = 0.43 + 0.57 * max(0, math.sin(2 * math.pi * k / SIDES))
+				shades.append((*to_linear(tuple(v * light for v in colors[i])), 1.0))
+		rings.append((ring, uv_of(p, extra), shades))
 	for i in range(len(rings) - 1):
-		(r0, uv0), (r1, uv1) = rings[i], rings[i + 1]
+		(r0, uv0, col0), (r1, uv1, col1) = rings[i], rings[i + 1]
 		for k in range(SIDES):
 			k2 = (k + 1) % SIDES
 			face = bm.faces.new((r0[k], r1[k], r1[k2], r0[k2]))
 			for loop, uv in zip(face.loops, (uv0, uv1, uv1, uv0)):
 				loop[uv_layer].uv = uv
+			if col is not None:
+				for loop, color in zip(face.loops, (col0[k], col1[k], col1[k2], col0[k2])):
+					loop[col] = color
 
 
 def paint(mesh, color_of):
@@ -235,9 +251,11 @@ def build_stripes(mat, values, step):
 			if abs(c) > 0.9:
 				break
 			for pts in level_lines(values, step, c):
-				run = [(p, height(p), 0.0) for p in pts]
-				add_tube(bm, uv_layer, run, lambda _: STRIPE_WIDTH / 2, STRIPE_HEIGHT / 2, lambda p, _: (p.x, p.y))
-	return finish_mesh("Stripes", bm, mat, stripe_color)
+				widths, shades = FLOW.relief(pts, PERIOD, STRIPE_WIDTH)
+				run = [(p, height(p), w) for p, w in zip(pts, widths)]
+				colors = [tuple(v * shade for v in stripe_color(p)) for p, shade in zip(pts, shades)]
+				add_tube(bm, uv_layer, run, lambda w: w / 2, STRIPE_HEIGHT / 2, lambda p, _: (p.x, p.y), colors)
+	return finish_mesh("Stripes", bm, mat)
 
 
 def trail_width(a):
@@ -288,6 +306,8 @@ def vertex_color_material(name, roughness):
 	col.layer_name = "Col"
 	mat.node_tree.links.new(col.outputs["Color"], bsdf.inputs["Base Color"])
 	bsdf.inputs["Roughness"].default_value = roughness
+	bsdf.inputs["Coat Weight"].default_value = 0.18
+	bsdf.inputs["Coat Roughness"].default_value = 0.35
 	return mat
 
 
@@ -501,7 +521,15 @@ def render_ball_env():
 		scene.render.engine = "CYCLES"
 	except TypeError as error:  # el mensaje enumera los motores disponibles
 		raise RuntimeError(f"Se necesita Cycles para la panorámica del reflejo: {error}") from error
-	scene.cycles.samples = 48
+	# Una panorámica pequeña para cromo satinado no necesita rebotes profundos.
+	# Limitar hilos evita la sobresuscripción de CPU en builds de contenedores.
+	scene.render.threads_mode = "FIXED"
+	scene.render.threads = min(8, os.cpu_count() or 1)
+	scene.cycles.samples = 24
+	scene.cycles.use_denoising = True
+	scene.cycles.max_bounces = 4
+	scene.cycles.diffuse_bounces = 2
+	scene.cycles.glossy_bounces = 2
 	scene.render.resolution_x, scene.render.resolution_y = 1024, 512
 	scene.render.resolution_percentage = 100
 	scene.render.image_settings.file_format = "JPEG"
