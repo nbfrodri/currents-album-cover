@@ -66,3 +66,13 @@ test("los golpes normales hinchan la bola igual; los que destacan mucho, bastant
 	assert.ok(ballSwell(1) < 1.14); // antes 1.18
 	assert.ok(ballSwell(1) > ballSwell(0.6)); // sigue creciendo, sin cortar en seco
 });
+
+test("tras recargar, el primer clic no deja la bola inflada: se relaja entre golpes desde el principio", () => {
+	const beat = createBeat();
+	for (let f = 0; f < 120; f++) beat.update(0, frame); // página recién cargada, sin música
+	const frames = kicks(beat, 2.5);
+	for (let start = 0.5; start < 2.5; start += 0.5) {
+		const window = frames.filter(({ t }) => t >= start && t < start + 0.5).map(({ pulse }) => pulse);
+		assert.ok(Math.min(...window) < 0.2, `relajada entre golpes en ${start}s (mín ${Math.min(...window).toFixed(2)})`);
+	}
+});

@@ -22,12 +22,13 @@ export function createBeat() {
 		update(bass, dt) {
 			envelope ??= bass; // arrancar no es un golpe
 			average ??= bass;
-			envelope = follow(envelope, bass, bass > envelope ? ATTACK : RELEASE, dt);
-			average = follow(average, bass, MEMORY, dt);
-			const excess = bass > FLOOR ? (envelope - average) / Math.max(average * RANGE, 0.02) : 0;
-			// al arrancar (o tras un silencio) la media aún no sabe cómo suena el tema y el primer
-			// golpe saldría enorme: el latido entra poco a poco durante MEMORY segundos
+			// al arrancar (o tras un silencio) la media aún no sabe cómo suena el tema: aprende deprisa
+			// (memoria corta que crece hasta MEMORY) y el latido entra poco a poco; si no, la bola se
+			// queda inflada los primeros segundos tras pulsarla
 			warm = bass > FLOOR ? warm + dt : 0;
+			envelope = follow(envelope, bass, bass > envelope ? ATTACK : RELEASE, dt);
+			average = follow(average, bass, Math.min(MEMORY, 0.1 + warm), dt);
+			const excess = bass > FLOOR ? (envelope - average) / Math.max(average * RANGE, 0.02) : 0;
 			const pulse = Math.min(Math.max(excess, 0), 1) * Math.min(warm / MEMORY, 1);
 			age = pulse > 0.5 && last <= 0.5 ? 0 : age + dt;
 			last = pulse;
