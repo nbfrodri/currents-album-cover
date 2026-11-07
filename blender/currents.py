@@ -380,9 +380,9 @@ def build_body():
 	ring = [top[0][i] for i in range(n)] + [top[j][n] for j in range(n)]
 	ring += [top[n][i] for i in range(n, 0, -1)] + [top[j][0] for j in range(n, 0, -1)]
 	low = [bm.verts.new((v.co.x, v.co.y, bottom * 2)) for v in ring]
-	for k in range(len(ring)):
-		k2 = (k + 1) % len(ring)
-		bm.faces.new((ring[k], ring[k2], low[k2], low[k]))
+	# cantos: cada tramo del borde superior con el suyo del reverso (el último cierra con el primero)
+	for up, up_next, down, down_next in zip(ring, ring[1:] + ring[:1], low, low[1:] + low[:1]):
+		bm.faces.new((up, up_next, down_next, down))
 	bm.faces.new(low)
 	finish_mesh("Body", bm, material("Body", (0.025, 0.012, 0.035), 0.0, 0.8))
 
