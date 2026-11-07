@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createBeat } from "../src/beat.js";
+import { ballSwell, createBeat } from "../src/beat.js";
 
 const frame = 1 / 60;
 
@@ -58,4 +58,11 @@ test("al empezar a sonar (al pulsar la bola) el primer golpe no es exagerado", (
 	assert.ok(Math.max(...first) < 0.4, `primer golpe ${Math.max(...first)}`);
 	const later = kicks(beat, 3).filter(({ t }) => t >= 2).map(({ pulse }) => pulse);
 	assert.ok(Math.max(...later) > 0.6); // luego late con normalidad
+});
+
+test("los golpes normales hinchan la bola igual; los que destacan mucho, bastante menos", () => {
+	assert.equal(ballSwell(0), 1);
+	assert.ok(Math.abs(ballSwell(0.5) - 1.09) < 1e-9); // como antes (18 % por pulso)
+	assert.ok(ballSwell(1) < 1.14); // antes 1.18
+	assert.ok(ballSwell(1) > ballSwell(0.6)); // sigue creciendo, sin cortar en seco
 });

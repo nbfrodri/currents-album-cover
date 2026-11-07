@@ -35,3 +35,13 @@ export function createBeat() {
 		},
 	};
 }
+
+// Cuánto se hincha la bola con un pulso: igual que el pulso en los golpes normales y, por encima
+// de KNEE, comprimido, para que un golpe que destaca mucho (p. ej. tras un pasaje tranquilo o al
+// cambiar de tema) no la infle de más. Máximo: 1 + SWELL·(KNEE + (1 − KNEE)·0,3).
+const SWELL = 0.18;
+const KNEE = 0.6;
+export function ballSwell(pulse) {
+	const soft = pulse <= KNEE ? pulse : KNEE + (pulse - KNEE) * 0.3;
+	return 1 + soft * SWELL;
+}

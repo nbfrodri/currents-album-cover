@@ -5,7 +5,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { createPlayer } from "./player.js";
 import { createBackdrop } from "./backdrop.js";
 import { backRowCenter, backTrackAt } from "./back.js";
-import { createBeat } from "./beat.js";
+import { ballSwell, createBeat } from "./beat.js";
 import { mountPanel } from "./panel.js";
 import { mountSheet } from "./sheet.js";
 import { createHalo } from "./halo.js";
@@ -406,7 +406,7 @@ renderer.setAnimationLoop(() => {
 	const pulse = reducedMotion ? 0 : beat.update(kick, dt);
 	if (parts.ball) {
 		// late hacia arriba: la base sigue en el fondo del hoyo y nunca asoma por la contraportada
-		const scale = 1 + pulse * 0.18 + waveUniforms.uBass.value * 0.015;
+		const scale = ballSwell(pulse) + waveUniforms.uBass.value * 0.015;
 		parts.ball.scale.setScalar(scale);
 		parts.ball.position.y = parts.ball.userData.restY + parts.ball.userData.radius * (scale - 1);
 		parts.ball.material.emissiveIntensity = pulse * 0.35; // brillo: se nota de frente y de lejos
