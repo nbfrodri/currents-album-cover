@@ -458,6 +458,7 @@ renderer.setAnimationLoop(() => {
 	waveUniforms.uBeatAge.value = beat.age;
 	letters.update({ dt, playing: player.state().playing, bass, mid, pulse, motion: !reducedMotion });
 	backdrop.update({ dt, bass, mid, pulse, beatAge: beat.age, aspect: camera.aspect, motion: !reducedMotion });
+	panel.tick(); // la barra de progreso avanza fluida, no a saltos de timeupdate
 	if (!tracklist.hidden) drawVisualizer(panel.context, panel.width, panel.height, freq, t);
 
 	// el entorno del reflejo gira con la portada
