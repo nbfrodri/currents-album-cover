@@ -45,6 +45,31 @@ function wireVolume(volumeInput, muteButton, player) {
 	player.setVolume(savedVolume());
 }
 
+// Barra de progreso: el evento timeupdate del audio solo llega ~4 veces por segundo y la barra iba
+// a saltos; tick() la mueve en cada fotograma mientras suena. El texto solo cambia cada segundo.
+function wireProgress(seekInput, timeCurrent, panel, player) {
+	let seeking = false;
+	let shownTime = "";
+	function showProgress(state) {
+		const duration = Number.isFinite(state.duration) ? state.duration : 0;
+		if (!seeking) seekInput.value = state.current;
+		seekInput.style.setProperty("--progress", `${duration ? (state.current / duration) * 100 : 0}%`);
+		const time = formatTime(state.current);
+		if (time !== shownTime) timeCurrent.textContent = shownTime = time;
+	}
+	function tick() {
+		if (panel.hidden) return;
+		const state = player.state();
+		if (state.playing) showProgress(state);
+	}
+	seekInput.addEventListener("input", () => {
+		seeking = true;
+		player.seek(Number(seekInput.value));
+		seeking = false;
+	});
+	return { showProgress, tick };
+}
+
 // Panel del reproductor: tema actual, controles, barra de progreso y tracklist clicable. Se abre
 // solo al empezar un tema; se puede minimizar a una barra o recogerlo al mínimo con la X (solo
 // el nombre del álbum y el botón de maximizar). Oculto con T o CURRENTS, no vuelve a abrirse solo hasta el siguiente tema. onState recibe cada cambio del reproductor (para que la portada
@@ -85,22 +110,7 @@ export function mountPanel(doc, player, tracks, onState) {
 
 	const trackButtons = renderTracks(doc, $("#tracks"), tracks, player);
 
-	let seeking = false;
-	// Progreso: el evento timeupdate del audio solo llega ~4 veces por segundo y la barra iba a
-	// saltos; tick() la mueve en cada fotograma mientras suena. El texto solo cambia cada segundo.
-	let shownTime = "";
-	function showProgress(state) {
-		const duration = Number.isFinite(state.duration) ? state.duration : 0;
-		if (!seeking) seekInput.value = state.current;
-		seekInput.style.setProperty("--progress", `${duration ? (state.current / duration) * 100 : 0}%`);
-		const time = formatTime(state.current);
-		if (time !== shownTime) timeCurrent.textContent = shownTime = time;
-	}
-	function tick() {
-		if (panel.hidden) return;
-		const state = player.state();
-		if (state.playing) showProgress(state);
-	}
+	const { showProgress, tick } = wireProgress(seekInput, timeCurrent, panel, player);
 	let shownFor = null; // tema para el que ya se abrió solo: cerrado, sigue cerrado hasta otro
 	player.onChange((state) => {
 		if (state.playing && state.index !== shownFor) {
@@ -126,11 +136,6 @@ export function mountPanel(doc, player, tracks, onState) {
 	playButton.addEventListener("click", () => player.toggle());
 	$("#prev").addEventListener("click", () => player.prev());
 	$("#next").addEventListener("click", () => player.next());
-	seekInput.addEventListener("input", () => {
-		seeking = true;
-		player.seek(Number(seekInput.value));
-		seeking = false;
-	});
 
 
 	// abre el reproductor minimizado si estaba cerrado (al tocar la bola): no tapa la portada
