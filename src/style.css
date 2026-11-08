@@ -16,7 +16,7 @@
 
 :root {
 	--ink: #07030b;
-	--slate: #4a5868; /* fondo azul grisáceo (el mismo que el del lienzo) */
+	--night: #241433; /* fondo morado oscuro (el mismo que el del lienzo) */
 	--panel: rgb(12 5 18 / 0.86);
 	--line: rgb(201 174 242 / 0.18);
 	--lilac: #c9aef2;
@@ -34,7 +34,7 @@
 html,
 body {
 	height: 100%;
-	background: radial-gradient(circle at 50% 40%, #56657a 0%, var(--slate) 70%);
+	background: radial-gradient(circle at 50% 40%, #33204a 0%, var(--night) 70%);
 	color: var(--text);
 	font-family: "Archivo Expanded", system-ui, sans-serif;
 	font-weight: 500;
@@ -388,31 +388,39 @@ input:focus-visible {
 	scrollbar-gutter: stable;
 }
 
-/* Barra de scroll: una raya lila fina sobre negro, como las de la portada; dorada al usarla */
-.tracks::-webkit-scrollbar {
+/* Barra de scroll (tracklist y ficha): una raya lila fina sobre negro, como las de la portada;
+dorada al usarla */
+.tracks::-webkit-scrollbar,
+.sheet-content::-webkit-scrollbar {
 	width: 6px;
 }
 
-.tracks::-webkit-scrollbar-track {
+.tracks::-webkit-scrollbar-track,
+.sheet-content::-webkit-scrollbar-track {
 	background: transparent;
 }
 
-.tracks::-webkit-scrollbar-thumb {
+.tracks::-webkit-scrollbar-thumb,
+.sheet-content::-webkit-scrollbar-thumb {
 	background: rgb(201 174 242 / 0.45);
 	border-radius: 3px;
 }
 
 .tracks::-webkit-scrollbar-thumb:hover,
-.tracks::-webkit-scrollbar-thumb:active {
+.tracks::-webkit-scrollbar-thumb:active,
+.sheet-content::-webkit-scrollbar-thumb:hover,
+.sheet-content::-webkit-scrollbar-thumb:active {
 	background: var(--gold);
 }
 
-.tracks::-webkit-scrollbar-button {
+.tracks::-webkit-scrollbar-button,
+.sheet-content::-webkit-scrollbar-button {
 	display: none;
 }
 
 @supports not selector(::-webkit-scrollbar) {
-	.tracks {
+	.tracks,
+	.sheet-content {
 		scrollbar-width: thin;
 		scrollbar-color: rgb(201 174 242 / 0.45) transparent;
 	}
@@ -457,72 +465,115 @@ input:focus-visible {
 }
 
 /* Botón de ayuda: pastilla abajo a la derecha, con el ? en un círculo dorado */
+/* Botón de ayuda: un panel pequeño como la ficha y el reproductor (fondo, filete lila, desenfoque y
+rayas diagonales), con el texto dorado de sus títulos y el "?" como una tecla */
 .help-button {
 	position: fixed;
 	right: 24px;
 	bottom: 24px;
 	display: flex;
 	align-items: center;
-	gap: 10px;
+	gap: 12px;
 	min-height: 44px;
-	padding: 6px 16px 6px 6px;
-	border: 1px solid rgb(242 181 68 / 0.45);
-	border-radius: 999px;
-	background: rgb(7 3 11 / 0.7);
-	backdrop-filter: blur(8px);
+	padding: 0 16px 0 0;
+	border: 1px solid var(--line);
+	background: var(--panel);
+	backdrop-filter: blur(12px);
 	color: var(--gold);
+	font: inherit;
 	font-size: 0.66rem;
 	font-weight: 700;
 	letter-spacing: 0.18em;
 	text-transform: uppercase;
-	transition: background 0.2s, color 0.2s, border-color 0.2s;
+	cursor: pointer;
+	transition: border-color 0.2s, color 0.2s;
+}
+
+.help-button::before {
+	content: "";
+	align-self: stretch;
+	width: 10px;
+	background: repeating-linear-gradient(135deg, var(--lilac) 0 2px, transparent 2px 6px);
+	opacity: 0.55;
+	transition: opacity 0.2s;
 }
 
 .help-mark {
 	display: grid;
 	place-items: center;
-	width: 30px;
-	height: 30px;
-	border-radius: 50%;
-	background: var(--gold);
-	color: var(--ink);
-	font-size: 0.85rem;
+	min-width: 22px;
+	height: 22px;
+	border: 1px solid var(--line);
+	color: var(--lilac);
+	font-size: 0.7rem;
 	letter-spacing: 0;
+	transition: border-color 0.2s, color 0.2s;
 }
 
 .help-button:hover,
 .help-button:focus-visible {
-	background: var(--gold);
-	border-color: var(--gold);
-	color: var(--ink);
+	border-color: rgb(242 181 68 / 0.5);
+}
+
+.help-button:hover::before,
+.help-button:focus-visible::before {
+	opacity: 0.9;
 }
 
 .help-button:hover .help-mark,
 .help-button:focus-visible .help-mark {
-	background: var(--ink);
+	border-color: var(--gold);
 	color: var(--gold);
 }
 
-/* Ayuda (popover nativo): se cierra con Esc o al pulsar fuera */
+/* Ayuda (popover nativo): un panel como la ficha y el reproductor, sobre el botón. Dos bloques
+(ratón o dedo · teclado) en filas alineadas: acción a la izquierda, efecto a la derecha.
+Se cierra con su X, con Esc o al pulsar fuera */
 .help {
 	inset: auto 24px 80px auto;
 	margin: 0;
-	width: min(420px, calc(100% - 32px));
-	padding: 18px 20px;
+	width: min(720px, calc(100% - 32px));
+	max-height: calc(100% - 120px);
+	overflow-y: auto;
+	padding: 0;
 	background: var(--panel);
 	color: var(--text);
 	border: 1px solid var(--line);
 	backdrop-filter: blur(12px);
-	font-size: 0.68rem;
+	font-size: 0.66rem;
 	letter-spacing: 0.04em;
+}
+
+.help:popover-open {
+	display: grid;
+	grid-template-columns: 1.15fr 1fr;
+	gap: 18px 28px;
+	padding-bottom: 18px;
+}
+
+/* rayas lila arriba, como en los paneles */
+.help::before {
+	content: "";
+	grid-column: 1 / -1;
+	height: 10px;
+	margin-bottom: -6px;
+	background: repeating-linear-gradient(135deg, var(--lilac) 0 2px, transparent 2px 6px);
+	opacity: 0.55;
 }
 
 .help::backdrop {
 	background: rgb(7 3 11 / 0.35);
 }
 
+.help-head {
+	grid-column: 1 / -1;
+	padding: 0 20px;
+	display: flex;
+	align-items: center;
+}
+
 .help h2 {
-	margin-bottom: 12px;
+	flex: 1;
 	font-size: 0.68rem;
 	font-weight: 700;
 	letter-spacing: 0.18em;
@@ -530,35 +581,83 @@ input:focus-visible {
 	color: var(--gold);
 }
 
-.help dl {
-	display: grid;
-	grid-template-columns: auto 1fr;
-	gap: 8px 14px;
+.help-group {
+	padding: 0 20px;
 }
 
-.help dt {
+.help-group + .help-group {
+	padding-left: 0;
+}
+
+.help h3 {
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--line);
+	font-size: 0.58rem;
+	font-weight: 700;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.help-list {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+	gap: 10px 14px;
+	margin-top: 12px;
+	padding: 0;
+	list-style: none;
+}
+
+.help-list li {
+	display: contents;
+}
+
+.help-act {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 20px;
 	font-weight: 700;
 	text-transform: uppercase;
 	color: var(--lilac);
 }
 
-.help dd {
-	margin: 0;
-	color: var(--muted);
-}
-
-.help .keys {
-	margin-top: 14px;
-	line-height: 2;
+.help-list li > span:last-child {
+	align-self: center;
+	line-height: 1.5;
 	color: var(--muted);
 }
 
 .help kbd {
+	min-width: 20px;
+	padding: 2px 6px;
+	border: 1px solid var(--line);
+	border-bottom-width: 2px;
 	font: inherit;
 	font-weight: 700;
+	text-align: center;
+	text-transform: none;
 	color: var(--text);
-	padding: 1px 6px;
-	border: 1px solid var(--line);
+}
+
+.help-note {
+	grid-column: 1 / -1;
+	margin: 0 20px;
+	padding-top: 12px;
+	border-top: 1px solid var(--line);
+	color: var(--muted);
+}
+
+/* estrecho: un bloque debajo del otro */
+@media (max-width: 640px) {
+	.help:popover-open {
+		grid-template-columns: 1fr;
+		inset: auto 16px 80px 16px;
+	}
+
+	.help-group + .help-group {
+		padding-left: 20px;
+	}
 }
 
 /* Ficha del álbum: a la izquierda, como el reproductor a la derecha */
@@ -732,7 +831,7 @@ input:focus-visible {
 	justify-content: center;
 	gap: 28px;
 	padding: 16px;
-	background: var(--slate);
+	background: var(--night);
 	transition: opacity 1s ease, visibility 0s linear 1s;
 }
 
