@@ -56,3 +56,12 @@ test("en pausa o con movimiento reducido vuelven al brillo y tamaño de Blender"
 	assert.ok(Math.abs(title.material.emissiveIntensity - 1) < 1e-3);
 	assert.equal(title.scale.x, 1);
 });
+
+test("los temas del tracklist brillan con la música pero no laten", () => {
+	const song = word();
+	const letters = createLetters();
+	letters.add(song, { bump: false });
+	frames(letters, 30, { playing: true, bass: 1, mid: 1, pulse: 1 });
+	assert.equal(song.scale.x, 1);
+	assert.ok(song.material.emissiveIntensity > 1.5);
+});

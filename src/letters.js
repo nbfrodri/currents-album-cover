@@ -2,8 +2,8 @@ import { Vector3 } from "three";
 
 // Letras que siguen a la música: los títulos de la portada y los textos naranjas de la contraportada
 // (materiales emisivos de Blender) se encienden con la energía del tema, se apagan en los pasajes
-// tranquilos y laten (crecen un poco y vuelven) con cada golpe, como la bola. En pausa, o con
-// movimiento reducido, vuelven a su brillo y tamaño de Blender.
+// tranquilos y, salvo los temas del tracklist, laten (crecen un poco y vuelven) con cada golpe, como
+// la bola. En pausa, o con movimiento reducido, vuelven a su brillo y tamaño de Blender.
 const DIM = 0.3; // brillo con música muy tranquila (1 = el de Blender)
 const BRIGHT = 2.8; // brillo con mucha energía
 const BUMP = 0.12; // cuánto crecen en un golpe pleno
@@ -32,10 +32,12 @@ export function createLetters() {
 	let level = 1;
 
 	return {
-		add(mesh) {
+		// bump: false → solo brilla, sin latir (los temas del tracklist)
+		add(mesh, { bump = true } = {}) {
 			const material = mesh.material;
 			if (!material?.emissive || meshes.has(mesh)) return;
 			if (!materials.has(material)) materials.set(material, material.emissiveIntensity);
+			if (!bump) return;
 			centerOrigin(mesh);
 			meshes.set(mesh, mesh.scale.x);
 		},
