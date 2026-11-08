@@ -48,7 +48,8 @@ function wireVolume(volumeInput, muteButton, player) {
 // Panel del reproductor: tema actual, controles, barra de progreso y tracklist clicable. Se abre
 // solo al empezar un tema; se puede minimizar a una barra o recogerlo al mínimo con la X (solo
 // el nombre del álbum y el botón de maximizar). Oculto con T o CURRENTS, no vuelve a abrirse solo hasta el siguiente tema. onState recibe cada cambio del reproductor (para que la portada
-// reaccione). Devuelve setOpen y el lienzo del visualizador para el bucle de render.
+// reaccione). Devuelve setOpen, tick (avanza la barra de progreso en cada fotograma) y el lienzo del
+// visualizador para el bucle de render.
 export function mountPanel(doc, player, tracks, onState) {
 	const $ = (selector) => doc.querySelector(selector);
 	const panel = $("#tracklist");
@@ -85,6 +86,21 @@ export function mountPanel(doc, player, tracks, onState) {
 	const trackButtons = renderTracks(doc, $("#tracks"), tracks, player);
 
 	let seeking = false;
+	// Progreso: el evento timeupdate del audio solo llega ~4 veces por segundo y la barra iba a
+	// saltos; tick() la mueve en cada fotograma mientras suena. El texto solo cambia cada segundo.
+	let shownTime = "";
+	function showProgress(state) {
+		const duration = Number.isFinite(state.duration) ? state.duration : 0;
+		if (!seeking) seekInput.value = state.current;
+		seekInput.style.setProperty("--progress", `${duration ? (state.current / duration) * 100 : 0}%`);
+		const time = formatTime(state.current);
+		if (time !== shownTime) timeCurrent.textContent = shownTime = time;
+	}
+	function tick() {
+		if (panel.hidden) return;
+		const state = player.state();
+		if (state.playing) showProgress(state);
+	}
 	let shownFor = null; // tema para el que ya se abrió solo: cerrado, sigue cerrado hasta otro
 	player.onChange((state) => {
 		if (state.playing && state.index !== shownFor) {
@@ -98,9 +114,7 @@ export function mountPanel(doc, player, tracks, onState) {
 		trackButtons.forEach((button, i) => button.setAttribute("aria-current", String(i === state.index)));
 		const duration = Number.isFinite(state.duration) ? state.duration : 0;
 		seekInput.max = duration;
-		if (!seeking) seekInput.value = state.current;
-		seekInput.style.setProperty("--progress", `${duration ? (state.current / duration) * 100 : 0}%`);
-		timeCurrent.textContent = formatTime(state.current);
+		showProgress(state);
 		timeTotal.textContent = formatTime(duration);
 		volumeInput.value = state.volume;
 		volumeInput.style.setProperty("--progress", `${state.muted ? 0 : state.volume * 100}%`);
@@ -128,5 +142,5 @@ export function mountPanel(doc, player, tracks, onState) {
 
 	wireVolume(volumeInput, muteButton, player);
 
-	return { setOpen, reveal, collapse, context: canvas.getContext("2d"), width: canvas.width, height: canvas.height };
+	return { setOpen, reveal, collapse, tick, context: canvas.getContext("2d"), width: canvas.width, height: canvas.height };
 }
