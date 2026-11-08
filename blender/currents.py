@@ -14,8 +14,10 @@ materiales y texto); la web solo la carga y añade la interacción.
   separadas para que la web las haga clicables.
 - Body: cuerpo negro del álbum (la superficie con el hoyo de la bola, los cantos y el reverso): los
   huecos entre rayas se ven negros, como en el original, y por detrás no se ve la bola.
-- BackArt: contraportada en el reverso, con rayas lila, título y el tracklist.
-- BackGlass: placa de cristal gruesa y biselada, separada del reverso y encajada en el marco.
+- BackArt: contraportada en el reverso (números, tiempos, filetes bajo cada fila y rayas lila).
+  BackBand, BackAlbum y BackSongNN: sus textos naranjas, sueltos para que la web los haga latir.
+- BackGlass: placa de cristal gruesa y biselada, con vetas diagonales de reflejo, separada del
+  reverso y encajada en el marco.
 - public/models/ball_env.jpg: panorámica renderizada desde el centro de la bola (rayas, cielo de
   estudio y una ventana de luz arriba a la izquierda) que la web usa como reflejo del cromo.
 Coordenadas de cálculo "de imagen" (0..1, y hacia abajo), medidas sobre la portada original.
@@ -394,37 +396,67 @@ def build_body():
 	finish_mesh("Body", bm, material("Body", (0.025, 0.012, 0.035), 0.0, 0.8))
 
 
+def face_back(obj):
+	"""Todas las caras hacia -Z, para que el reverso se vea desde detrás."""
+	bm = bmesh.new()
+	bm.from_mesh(obj.data)
+	for f in bm.faces:
+		if f.normal.z > 0:
+			f.normal_flip()
+	bm.to_mesh(obj.data)
+	bm.free()
+
+
+def back_titles():
+	"""Nombres de las piezas naranjas del reverso: cada una late por separado en la web."""
+	return ["BackBand", "BackAlbum", *(f"BackSong{k + 1:02d}" for k in range(len(TRACKS)))]
+
+
 def build_back(size):
 	"""Contraportada, para leerse desde detrás: título, tracklist y una banda de rayas lila.
-	(u, v) son coordenadas vistas desde el reverso: u hacia la derecha del que mira, v hacia arriba."""
+	(u, v) son coordenadas vistas desde el reverso: u hacia la derecha del que mira, v hacia arriba.
+	Los textos naranjas (artista, álbum y temas) son piezas sueltas para que la web los haga latir;
+	el resto (números, tiempos, filetes y rayas) va unido en BackArt."""
 	z = -BACK_DEPTH * 2 - 0.002
 	orange = material("BackTitle", TITLE_ORANGE, 0.0, 0.5, emission=1.0)
 	lilac = material("BackLilac", LILAC_NEAR, 0.0, 0.5, emission=0.6)
+	rule = material("BackRule", LILAC_NEAR, 0.0, 0.6, emission=0.12)
 
 	def at(u, v):
 		return (-u, v, z)
 
-	parts = [(add_text("TAME IMPALA", at(-0.93, 0.84), size, "LEFT", True), orange),
-		(add_text("CURRENTS", at(0.93, 0.84), size, "RIGHT", True), orange)]
+	titles = [add_text("TAME IMPALA", at(-0.93, 0.84), size, "LEFT", True),
+		add_text("CURRENTS", at(0.93, 0.84), size, "RIGHT", True)]
+	parts = []
+	bm = bmesh.new()  # filete fino bajo cada fila: guía la vista del título a su duración
 	for k, (title, time) in enumerate(TRACKS):
 		v = BACK_ROWS["top"] - k * BACK_ROWS["step"]
 		parts.append((add_text(f"{k + 1:02d}", at(-BACK_ROWS["half"], v), size * 0.75, "LEFT", True), lilac))
 		if k == 0:
 			cap = parts[-1][0].dimensions.y  # alto de las cifras ≈ mayúsculas, sobre la línea base
-		parts.append((add_text(title.upper(), at(-0.7, v), size * 0.75, "LEFT", True), orange))
+		titles.append(add_text(title.upper(), at(-0.7, v), size * 0.75, "LEFT", True))
 		parts.append((add_text(time, at(BACK_ROWS["half"], v), size * 0.75, "RIGHT", True), lilac))
+		low = v - BACK_ROWS["step"] * 0.3
+		quad = [bm.verts.new(at(u, low + dv)) for u, dv in
+			((-BACK_ROWS["half"], 0), (BACK_ROWS["half"], 0), (BACK_ROWS["half"], -0.003), (-BACK_ROWS["half"], -0.003))]
+		bm.faces.new(quad)
+	parts.append((finish_mesh("BackRules", bm, rule), rule))
 
 	bm = bmesh.new()  # banda de rayas lila abajo
 	for k in range(22):
 		v = -0.5 - k * 0.021
 		quad = [bm.verts.new(at(u, v + dv)) for u, dv in ((-1, 0), (1, 0), (1, -0.011), (-1, -0.011))]
 		bm.faces.new(quad)
-	stripes = finish_mesh("BackStripes", bm, lilac)
-	parts.append((stripes, lilac))
+	parts.append((finish_mesh("BackStripes", bm, lilac), lilac))
 
 	for obj, mat in parts:
 		obj.data.materials.clear()
 		obj.data.materials.append(mat)
+	for obj, name in zip(titles, back_titles()):
+		obj.name = obj.data.name = name
+		obj.data.materials.clear()
+		obj.data.materials.append(orange)
+		face_back(obj)
 	bpy.ops.object.select_all(action="DESELECT")
 	for obj, _ in parts:
 		obj.select_set(True)
@@ -434,13 +466,7 @@ def build_back(size):
 	back.name = back.data.name = "BackArt"
 	# la web hace clicables las filas: dónde están, en el espacio del modelo glTF (y = altura)
 	back["track_rows"] = {**BACK_ROWS, "count": len(TRACKS), "y": z, "cap": round(cap, 4)}
-	bm = bmesh.new()  # todas las caras hacia -Z, para que el reverso se vea desde detrás
-	bm.from_mesh(back.data)
-	for f in bm.faces:
-		if f.normal.z > 0:
-			f.normal_flip()
-	bm.to_mesh(back.data)
-	bm.free()
+	face_back(back)
 
 
 def roughness_image(width=1024, height=512, seed=7):
@@ -483,6 +509,25 @@ def chrome_material():
 	return mat
 
 
+def glass_image(size=512):
+	"""Velo del cristal con dos vetas diagonales de reflejo, como en una lámina de vitrina: el
+	alfa sube en las vetas y en los bordes, así se lee que hay una placa delante del tracklist."""
+	v, u = (np.mgrid[0:size, 0:size] + 0.5) / size
+	d = u + v  # diagonal, de arriba a la izquierda a abajo a la derecha
+	wide = np.exp(-(((d - 0.72) / 0.11) ** 2))
+	thin = np.exp(-(((d - 0.98) / 0.03) ** 2))
+	edge = np.clip(1 - np.minimum.reduce([u, v, 1 - u, 1 - v]) / 0.035, 0, 1) ** 2
+	alpha = np.clip(0.1 + 0.22 * wide + 0.3 * thin + 0.25 * edge, 0, 1)
+	pixels = np.empty((size, size, 4), dtype=np.float32)
+	pixels[..., :3] = np.array(to_linear((0.93, 0.9, 1.0)))
+	pixels[..., 3] = alpha
+	img = bpy.data.images.new("GlassStreaks", size, size, alpha=True)
+	img.pixels.foreach_set(pixels.ravel())
+	img.file_format = "PNG"
+	img.pack()
+	return img
+
+
 def build_glass():
 	"""Placa de cristal gruesa sobre el reverso, encajada en el marco (que la web hace más hondo):
 	separada del tracklist y con cantos biselados que atrapan la luz, para que se lea su grosor."""
@@ -494,9 +539,17 @@ def build_glass():
 	for v in bm.verts:
 		v.co = Vector((v.co.x * 2 * half, v.co.y * 2 * half, (inner + outer) / 2 + v.co.z * (inner - outer)))
 	bmesh.ops.bevel(bm, geom=list(bm.edges), offset=GLASS_THICK * 0.7, segments=4, profile=0.5, affect="EDGES")
+	uv_layer = bm.loops.layers.uv.new("UVMap")  # proyección frontal: las vetas cruzan la placa
+	for face in bm.faces:
+		for loop in face.loops:
+			loop[uv_layer].uv = (loop.vert.co.x / 2 + 0.5, loop.vert.co.y / 2 + 0.5)
 	mat = material("Glass", (0.92, 0.9, 1.0), 0.0, 0.05)
-	bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
-	bsdf.inputs["Alpha"].default_value = 0.12  # dos caras: cuenta doble
+	nodes, links = mat.node_tree.nodes, mat.node_tree.links
+	bsdf = next(n for n in nodes if n.type == "BSDF_PRINCIPLED")
+	tex = nodes.new("ShaderNodeTexImage")
+	tex.image = glass_image()
+	links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+	links.new(tex.outputs["Alpha"], bsdf.inputs["Alpha"])
 	mat.surface_render_method = "BLENDED"
 	mesh = bpy.data.meshes.new("BackGlass")
 	bm.to_mesh(mesh)
@@ -621,7 +674,7 @@ def render_ball_env():
 def export():
 	os.makedirs(os.path.dirname(OUT), exist_ok=True)
 	bpy.ops.object.select_all(action="DESELECT")
-	for name in ("Ball", "Stripes", "Trail", "TitleBand", "TitleAlbum", "Body", "BackArt", "BackGlass"):
+	for name in ("Ball", "Stripes", "Trail", "TitleBand", "TitleAlbum", "Body", "BackArt", "BackGlass", *back_titles()):
 		bpy.data.objects[name].select_set(True)
 	bpy.ops.export_scene.gltf(
 		filepath=OUT,

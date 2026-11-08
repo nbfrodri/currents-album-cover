@@ -180,7 +180,7 @@ loader.load("models/currents.glb", (gltf) => {
 			halo.place(obj.position, obj.userData.radius);
 		}
 		if (obj.name === "Body") parts.body = obj;
-		if (obj.material.name === "Title" || obj.material.name === "BackTitle") letters.add(obj.material);
+		if (obj.material.name === "Title" || obj.material.name === "BackTitle") letters.add(obj);
 		if (obj.name === "BackGlass") {
 			// lámina de plástico o cristal sobre la contraportada: refleja el mismo entorno que la bola
 			parts.glass = obj;
