@@ -16,7 +16,7 @@ materiales y texto); la web solo la carga y añade la interacción.
   huecos entre rayas se ven negros, como en el original, y por detrás no se ve la bola.
 - BackArt: contraportada en el reverso (números, tiempos, filetes bajo cada fila y rayas lila).
   BackBand, BackAlbum y BackSongNN: sus textos naranjas, sueltos para que la web los haga latir.
-- BackGlass: placa de cristal gruesa y biselada, con una veta diagonal suave de reflejo, separada del
+- BackGlass: placa de cristal gruesa y biselada, con una veta diagonal tenue de reflejo, separada del
   reverso y encajada en el marco.
 - public/models/ball_env.jpg: panorámica renderizada desde el centro de la bola (rayas, cielo de
   estudio y una ventana de luz arriba a la izquierda) que la web usa como reflejo del cromo.
@@ -510,16 +510,16 @@ def chrome_material():
 
 
 def glass_image(size=512):
-	"""Velo del cristal con una veta diagonal ancha y suave de reflejo, como en una lámina de vitrina:
-	el alfa sube en la veta y en los bordes, así se lee que hay una placa delante del tracklist.
-	Sin vetas finas: una línea nítida cruzando la placa se veía demasiado."""
+	"""Velo del cristal, blanco neutro: una veta diagonal estrecha y tenue de reflejo y bordes más
+	opacos, así se lee que hay una placa delante del tracklist. Una línea nítida o una veta ancha
+	y teñida de lila se veían demasiado."""
 	v, u = (np.mgrid[0:size, 0:size] + 0.5) / size
 	d = u + v  # diagonal, de arriba a la izquierda a abajo a la derecha
-	wide = np.exp(-(((d - 0.72) / 0.11) ** 2))
+	streak = np.exp(-(((d - 0.7) / 0.05) ** 2))
 	edge = np.clip(1 - np.minimum.reduce([u, v, 1 - u, 1 - v]) / 0.035, 0, 1) ** 2
-	alpha = np.clip(0.1 + 0.2 * wide + 0.25 * edge, 0, 1)
+	alpha = np.clip(0.08 + 0.09 * streak + 0.28 * edge, 0, 1)
 	pixels = np.empty((size, size, 4), dtype=np.float32)
-	pixels[..., :3] = np.array(to_linear((0.93, 0.9, 1.0)))
+	pixels[..., :3] = np.array(to_linear((0.96, 0.96, 0.97)))
 	pixels[..., 3] = alpha
 	img = bpy.data.images.new("GlassStreaks", size, size, alpha=True)
 	img.pixels.foreach_set(pixels.ravel())
@@ -543,7 +543,7 @@ def build_glass():
 	for face in bm.faces:
 		for loop in face.loops:
 			loop[uv_layer].uv = (loop.vert.co.x / 2 + 0.5, loop.vert.co.y / 2 + 0.5)
-	mat = material("Glass", (0.92, 0.9, 1.0), 0.0, 0.05)
+	mat = material("Glass", (0.96, 0.96, 0.97), 0.0, 0.05)
 	nodes, links = mat.node_tree.nodes, mat.node_tree.links
 	bsdf = next(n for n in nodes if n.type == "BSDF_PRINCIPLED")
 	tex = nodes.new("ShaderNodeTexImage")

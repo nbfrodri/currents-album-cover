@@ -185,7 +185,7 @@ loader.load("models/currents.glb", (gltf) => {
 			// lámina de plástico o cristal sobre la contraportada: refleja el mismo entorno que la bola
 			parts.glass = obj;
 			obj.material.envMap = ballEnv;
-			obj.material.envMapIntensity = 1.5;
+			obj.material.envMapIntensity = 0.7; // reflejo discreto: el entorno es lila y lo teñía todo
 			obj.material.depthWrite = false;
 			obj.renderOrder = 2; // después de la franja del tema que suena
 		}
@@ -242,6 +242,11 @@ window.addEventListener("keydown", (e) => {
 	if (k === "r") controls.reset();
 	if (k === "t") setTracklist(tracklist.hidden);
 	if (k === "p") player.toggle();
+	// Espacio: reproducir o pausar, salvo sobre un botón o enlace (ahí ya lo activa el navegador)
+	if (e.key === " " && !/^(BUTTON|A|SUMMARY)$/.test(e.target?.tagName)) {
+		e.preventDefault();
+		player.toggle();
+	}
 	if (k === "n") player.next();
 	if (k === "b") player.prev();
 	if (k === "m") player.toggleMute();

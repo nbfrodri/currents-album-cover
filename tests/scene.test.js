@@ -190,6 +190,18 @@ test("los atajos no interceptan combinaciones del navegador ni campos de texto",
 	assert.equal(app.stats.resets, 1);
 });
 
+test("el espacio reproduce o pausa, sin pisar el botón que tenga el foco", () => {
+	const app = setup();
+	const key = app.listeners.get("keydown");
+	let prevented = 0;
+	key({ key: " ", preventDefault: () => prevented++ });
+	assert.deepEqual(app.stats.player, ["toggle"]);
+	assert.equal(prevented, 1); // la página no hace scroll
+	key({ key: " ", target: { tagName: "BUTTON" }, preventDefault: () => prevented++ });
+	key({ key: " ", repeat: true, preventDefault: () => prevented++ });
+	assert.deepEqual(app.stats.player, ["toggle"]);
+});
+
 test("la tecla T abre y cierra el reproductor; la X y Escape lo recogen al mínimo sin quitarlo", () => {
 	const app = setup();
 	const panel = app.elements.get("#tracklist");

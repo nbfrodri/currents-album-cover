@@ -23,7 +23,7 @@ Para probarlo en el móvil (misma red Wi‑Fi): `npx vite --host` y abrir la IP 
 | Rueda / pellizcar | Acerca y aleja (sin alejarse más que la vista inicial) |
 | Tecla `R` | Vuelve a la vista inicial |
 | Tecla `T` | Muestra/oculta el reproductor (la X o `Esc` lo recogen al nombre del álbum) |
-| Clic en la bola o tecla `P` | Reproduce o pausa el disco |
+| Clic en la bola, `Espacio` o `P` | Reproduce o pausa el disco |
 | Tecla `N` · tecla `B` | Tema siguiente · tema anterior |
 | Clic en un tema de la contraportada | Reproduce ese tema |
 | Pasar el ratón por la portada | Las rayas ondulan alrededor del puntero |
@@ -34,7 +34,7 @@ Para probarlo en el móvil (misma red Wi‑Fi): `npx vite --host` y abrir la IP 
 	- **Rayas**: tubos planos lila trazados como curvas de nivel de un flujo potencial (`blender/flow.py`, marching squares). Detrás de la bola, remolinos locales forman eses, horquillas y gotas dentro de una estela diagonal hacia abajo a la derecha; fuera de ella las rayas permanecen tranquilas. El ancho se adapta a la separación y curvatura. Los colores de vértice incluyen crestas claras, lados oscuros, sombras en los pliegues y el hoyo, y una caída a casi negro arriba a la derecha; no se usan texturas de imagen.
 	- **Estela**: una sola línea por el hueco central (`ψ ≈ 0`) a ras de las rayas: hilo rojo fino, mancha rosa al llegar a la bola, pasa por debajo y sale como cola ondulada naranja y amarilla.
 	- **Bola**: cromo gris satinado, hundida en un hoyo de la superficie, con rugosidad irregular (manchas suaves en una textura generada en Blender).
-	- **Cristal trasero**: una placa gruesa y biselada, con una veta diagonal suave de reflejo, cubre la contraportada dentro del marco y refleja el entorno. Un filete fino bajo cada fila une cada tema con su duración.
+	- **Cristal trasero**: una placa gruesa y biselada, con una veta diagonal tenue de reflejo, cubre la contraportada dentro del marco y refleja el entorno. Un filete fino bajo cada fila une cada tema con su duración.
 	- **Letras con la música**: los títulos de la portada y los de la contraportada (piezas sueltas en Blender) se encienden con la energía y se apagan en los pasajes tranquilos; el artista y el álbum, además, laten con cada golpe.
 	- **Texto**: "TAME IMPALA" y "CURRENTS" en naranja, flotando por delante de la superficie.
 	- **Reflejo**: Blender renderiza una panorámica desde el centro de la bola (`public/models/ball_env.jpg`) con las rayas y un cielo de estudio; la web la usa como entorno del cromo y la gira con la portada.
@@ -51,7 +51,7 @@ Para probarlo en el móvil (misma red Wi‑Fi): `npx vite --host` y abrir la IP 
 - Modelo comprimido con **Draco** (~300 KB); decodificador local en `public/draco/`.
 - Si los primeros 2 s van por debajo de 45 fps, baja la resolución interna.
 - Respeta `prefers-reduced-motion`: sin balanceo automático; también responde a cambios de la preferencia con la página abierta.
-- Controles accesibles por teclado (`R`, `T`, `P`, `N`, `B`, `M`, foco visible) y con `aria-pressed`; los atajos respetan los modificadores y los campos de texto.
+- Controles accesibles por teclado (`R`, `T`, `Espacio`, `P`, `N`, `B`, `M`, foco visible) y con `aria-pressed`; los atajos respetan los modificadores y los campos de texto.
 - El giroscopio necesita un navegador compatible y un contexto seguro (HTTPS o localhost). En iOS, toca la página para solicitar permiso; una IP de la red local por HTTP permite probar el puntero, pero no garantiza acceso al sensor.
 
 ## Verificación
