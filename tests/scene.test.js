@@ -70,10 +70,11 @@ function setup(orientation) {
 			this.listeners = {};
 			this.target = new THREE.Vector3();
 			this.target0 = new THREE.Vector3();
+			this.position0 = new THREE.Vector3();
 		}
 		addEventListener(name, callback) { this.listeners[name] = callback; }
 		update() {}
-		saveState() {}
+		saveState() { this.position0.copy(this.camera.position); }
 		reset() { stats.resets++; }
 	}
 	const source = readFileSync(new URL("../src/main.js", import.meta.url), "utf8").replace(/^import .*;\n/gm, "");
@@ -346,14 +347,16 @@ test("el botón derecho no desplaza la vista: solo girar y acercar", () => {
 test("en reposo la cámara vuelve al frente y la portada se balancea sin enseñar el reverso", () => {
 	const app = setup();
 	app.preference.change({ matches: false });
-	// cámara detrás de la portada, modelo ya cargado y entrada terminada
-	app.run("let clock = startedAt; performance = { now: () => clock }; model = new THREE.Group(); camera.position.set(0.3, 0, -camera.position.length())");
+	// cámara detrás de la portada y acercada, modelo ya cargado y entrada terminada
+	const home = app.run("camera.position.length()");
+	app.run("let clock = startedAt; performance = { now: () => clock }; model = new THREE.Group(); camera.position.set(0.3, 0, -camera.position.length() * 0.5)");
 	let maxSway = 0;
 	for (let i = 0; i < 60 * 30; i++) {
 		app.run("clock += 1000 / 60; renderer.frame()");
 		if (i > 60 * 6) maxSway = Math.max(maxSway, Math.abs(app.run("cover.rotation.y")));
 	}
 	assert.ok(app.run("camera.position.z > 0 && Math.abs(camera.position.x) < 0.05 * camera.position.z")); // de frente
+	assert.ok(Math.abs(app.run("camera.position.length()") - home) < 0.01 * home); // y con el zoom inicial
 	assert.ok(maxSway > 0.2 && maxSway < Math.PI / 2 - 0.5); // se mueve, pero siempre de cara
 	app.listeners.get("pointermove")();
 	for (let i = 0; i < 120; i++) app.run("clock += 1000 / 60; renderer.frame()");

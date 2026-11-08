@@ -1,7 +1,7 @@
 import * as THREE from "three";
 
 // Fondo de la página: morado oscuro, con rayas diagonales de un morado claro y apagado
-// con un brillo fucsia en su interior que sube y baja despacio. Las rayas
+// con un brillo fucsia en su interior que sigue a la música (en silencio solo respira, tenue). Las rayas
 // que ondulan con ondas largas y lentas; una franja de meandros redondos deriva despacio y hay
 // un halo detrás de la portada. La música lo mueve con
 // suavidad: graves que amplían las ondas, medios que iluminan y una onda suave en cada golpe.
@@ -26,15 +26,15 @@ const FRAGMENT = `
 		float c = dot(p, across);
 		float t = uTime * 0.5; // lento: un fondo que se mueve deprisa marea
 		// ondas largas y lentas en todo el fondo; los graves las amplían
-		float amp = 0.04 + uBass * 0.07;
+		float amp = 0.04 + uBass * 0.13;
 		float shift = amp * (0.6 * sin(a * 2.6 + c * 1.2 + t * 0.35) + 0.4 * sin(a * 4.3 - c * 2.0 - t * 0.27));
 		// una franja de rayas derretidas en meandros redondos (como la estela bajo la bola) que
 		// deriva despacio por la pantalla
 		float band = smoothstep(0.55, 0.95, 0.5 + 0.5 * sin(c * 2.2 - a * 0.6 + t * 0.06));
-		shift += band * (0.03 + uBass * 0.028) * sin(a * 14.0 + 3.0 * sin(c * 3.0 + t * 0.2) + t * 0.5);
+		shift += band * (0.03 + uBass * 0.05) * sin(a * 14.0 + 3.0 * sin(c * 3.0 + t * 0.2) + t * 0.5);
 		// onda suave del último golpe, que sale del centro
 		float ring = exp(-pow((length(p) - uBeatAge * 0.6) * 6.0, 2.0)) * exp(-uBeatAge * 1.8);
-		shift += ring * 0.016;
+		shift += ring * 0.03;
 		// rayas morado claro sobre morado oscuro, con el núcleo encendido en fucsia.
 		// No se deslizan (solo ondulan) y no son demasiado finas: así no parpadean en muaré
 		float profile = 0.5 + 0.5 * sin((c + shift) * 120.0);
@@ -52,9 +52,11 @@ const FRAGMENT = `
 		vec3 fuchsia = vec3(1.0, 0.028, 0.456);
 		float lit = (0.55 + 0.45 * shade) * (0.85 + 0.15 * band);
 		vec3 color = mix(night, lilac, body * 0.32 * lit);
-		// brillo interior: respira con el tiempo (uBreath) y se aviva con los medios y los golpes
+		// brillo interior: lo marca la música (medios, graves y cada golpe); en silencio solo respira
+		// tenue con el tiempo (uBreath), y esa respiración se apaga en cuanto suena algo
 		float core = pow(profile, 6.0);
-		float glow = 0.05 + 0.3 * uBreath + 0.18 * uMid + 0.15 * uGlow + 0.3 * ring;
+		float quiet = 1.0 - clamp((uMid + uBass) * 2.0, 0.0, 1.0);
+		float glow = 0.04 + 0.12 * uBreath * quiet + 0.4 * uMid + 0.22 * uBass + 0.45 * uGlow + 0.5 * ring;
 		color += fuchsia * core * glow * lit;
 		color *= mix(0.78, 1.0, vignette) * (1.0 + 0.09 * halo * uGlow);
 		gl_FragColor = vec4(color, 1.0);
@@ -76,7 +78,7 @@ export function createBackdrop() {
 		uGlow: { value: 0 },
 		uAspect: { value: 1 },
 		uBeatAge: { value: 99 }, // segundos desde el último latido
-		uBreath: { value: 0.5 }, // 0..1: intensidad del brillo fucsia, que sube y baja con el tiempo
+		uBreath: { value: 0.5 }, // 0..1: respiración lenta del brillo fucsia cuando no suena nada
 	};
 	const mesh = new THREE.Mesh(
 		new THREE.PlaneGeometry(2, 2),
@@ -96,7 +98,7 @@ export function createBackdrop() {
 			return;
 		}
 		uniforms.uBreath.value = breath(clock);
-		uniforms.uTime.value += dt * (1 + bass * 0.3); // apenas más deprisa con energía
+		uniforms.uTime.value += dt * (1 + bass * 0.3); // apenas más deprisa con energía: deprisa marea
 		uniforms.uBass.value = follow(uniforms.uBass.value, bass, 0.3, dt);
 		uniforms.uMid.value = follow(uniforms.uMid.value, mid, 0.3, dt);
 		uniforms.uGlow.value = follow(uniforms.uGlow.value, pulse, 0.08, dt);

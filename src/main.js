@@ -391,8 +391,8 @@ function adaptQuality() {
 	frames = -1;
 }
 
-// En reposo la cámara vuelve poco a poco a la vista de frente (por el camino corto), sin cambiar
-// el zoom: así el balanceo siempre enseña la parte de delante.
+// En reposo la cámara vuelve poco a poco a la vista de frente (por el camino corto) y al zoom
+// inicial: así el balanceo siempre enseña la portada entera y por delante.
 const orbit = new THREE.Spherical();
 const offset = new THREE.Vector3();
 function returnToFront(weight, dt) {
@@ -403,6 +403,7 @@ function returnToFront(weight, dt) {
 	const turn = Math.atan2(Math.sin(-orbit.theta), Math.cos(-orbit.theta)); // de theta a 0
 	orbit.theta += turn * k;
 	orbit.phi += (Math.PI / 2 - orbit.phi) * k;
+	orbit.radius += (controls.position0.distanceTo(controls.target0) - orbit.radius) * k;
 	camera.position.setFromSpherical(orbit).add(controls.target);
 }
 

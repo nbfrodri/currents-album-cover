@@ -93,15 +93,34 @@
 			</div>
 		</section>
 
-		<div id="help" class="help" popover>
-			<h2>Controles</h2>
-			<dl>
-				<dt>Arrastrar</dt><dd>Girar el álbum, también para ver la contraportada</dd>
-				<dt>Rueda · pellizcar</dt><dd>Acercar y alejar</dd>
-				<dt>La bola</dt><dd>Reproducir o pausar</dd>
-				<dt>Contraportada</dt><dd>Clic en un tema para escucharlo</dd>
-			</dl>
-			<p class="keys"><kbd>Espacio</kbd> <kbd>P</kbd> pausa <kbd>N</kbd> <kbd>B</kbd> siguiente / anterior <kbd>M</kbd> silencio <kbd>T</kbd> reproductor <kbd>R</kbd> centrar <kbd>?</kbd> esta ayuda <kbd>Esc</kbd> cerrar</p>
+		<div id="help" class="help" popover aria-labelledby="help-title">
+			<header class="help-head">
+				<h2 id="help-title">Controles</h2>
+				<button class="head-button" type="button" popovertarget="help" popovertargetaction="hide" aria-label="Cerrar la ayuda">
+					<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3 L13 13 M13 3 L3 13" /></svg>
+				</button>
+			</header>
+			<section class="help-group" aria-labelledby="help-pointer">
+				<h3 id="help-pointer">Ratón o dedo</h3>
+				<ul class="help-list">
+					<li><span class="help-act">Arrastrar</span><span>Gira el álbum, también hacia atrás</span></li>
+					<li><span class="help-act">Rueda · pellizcar</span><span>Acerca y aleja</span></li>
+					<li><span class="help-act">La bola</span><span>Reproduce o pausa</span></li>
+					<li><span class="help-act">Un tema</span><span>Lo reproduce (contraportada)</span></li>
+				</ul>
+			</section>
+			<section class="help-group" aria-labelledby="help-keys">
+				<h3 id="help-keys">Teclado</h3>
+				<ul class="help-list">
+					<li><span class="help-act"><kbd>Espacio</kbd> <kbd>P</kbd></span><span>Reproduce o pausa</span></li>
+					<li><span class="help-act"><kbd>N</kbd> <kbd>B</kbd></span><span>Siguiente · anterior</span></li>
+					<li><span class="help-act"><kbd>M</kbd></span><span>Silencia</span></li>
+					<li><span class="help-act"><kbd>T</kbd></span><span>Muestra u oculta el reproductor</span></li>
+					<li><span class="help-act"><kbd>R</kbd></span><span>Vuelve a la vista inicial</span></li>
+					<li><span class="help-act"><kbd>?</kbd> <kbd>Esc</kbd></span><span>Abre · cierra la ayuda</span></li>
+				</ul>
+			</section>
+			<p class="help-note">Sin tocar nada unos segundos, la portada se mece sola.</p>
 		</div>
 
 		<button id="help-button" class="help-button" type="button" popovertarget="help" aria-keyshortcuts="Shift+?">
