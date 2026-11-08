@@ -465,49 +465,64 @@ dorada al usarla */
 }
 
 /* Botón de ayuda: pastilla abajo a la derecha, con el ? en un círculo dorado */
+/* Botón de ayuda: un panel pequeño como la ficha y el reproductor (fondo, filete lila, desenfoque y
+rayas diagonales), con el texto dorado de sus títulos y el "?" como una tecla */
 .help-button {
 	position: fixed;
 	right: 24px;
 	bottom: 24px;
 	display: flex;
 	align-items: center;
-	gap: 10px;
+	gap: 12px;
 	min-height: 44px;
-	padding: 6px 16px 6px 6px;
-	border: 1px solid rgb(242 181 68 / 0.45);
-	border-radius: 999px;
-	background: rgb(7 3 11 / 0.7);
-	backdrop-filter: blur(8px);
+	padding: 0 16px 0 0;
+	border: 1px solid var(--line);
+	background: var(--panel);
+	backdrop-filter: blur(12px);
 	color: var(--gold);
+	font: inherit;
 	font-size: 0.66rem;
 	font-weight: 700;
 	letter-spacing: 0.18em;
 	text-transform: uppercase;
-	transition: background 0.2s, color 0.2s, border-color 0.2s;
+	cursor: pointer;
+	transition: border-color 0.2s, color 0.2s;
+}
+
+.help-button::before {
+	content: "";
+	align-self: stretch;
+	width: 10px;
+	background: repeating-linear-gradient(135deg, var(--lilac) 0 2px, transparent 2px 6px);
+	opacity: 0.55;
+	transition: opacity 0.2s;
 }
 
 .help-mark {
 	display: grid;
 	place-items: center;
-	width: 30px;
-	height: 30px;
-	border-radius: 50%;
-	background: var(--gold);
-	color: var(--ink);
-	font-size: 0.85rem;
+	min-width: 22px;
+	height: 22px;
+	border: 1px solid var(--line);
+	color: var(--lilac);
+	font-size: 0.7rem;
 	letter-spacing: 0;
+	transition: border-color 0.2s, color 0.2s;
 }
 
 .help-button:hover,
 .help-button:focus-visible {
-	background: var(--gold);
-	border-color: var(--gold);
-	color: var(--ink);
+	border-color: rgb(242 181 68 / 0.5);
+}
+
+.help-button:hover::before,
+.help-button:focus-visible::before {
+	opacity: 0.9;
 }
 
 .help-button:hover .help-mark,
 .help-button:focus-visible .help-mark {
-	background: var(--ink);
+	border-color: var(--gold);
 	color: var(--gold);
 }
 
