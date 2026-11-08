@@ -8,12 +8,14 @@ materiales y texto); la web solo la carga y añade la interacción.
   oscurece arriba a la derecha, con luces de cresta y sombras en los pliegues) va en sus vértices.
 - Trail: una sola línea por el hueco central (psi = 0), a ras de las rayas: hilo rojo fino y recto,
   mancha rosa al llegar a la bola, pasa por debajo y sale como cola ondulada naranja y amarilla.
-- Ball: bola de cromo gris satinado hundida en un hoyo de la superficie.
+- Ball: bola de cromo gris satinado hundida en un hoyo de la superficie, con una rugosidad
+  irregular (manchas suaves) en una textura generada aquí.
 - TitleBand y TitleAlbum: "TAME IMPALA" y "CURRENTS" en naranja (Archivo Expanded), piezas
   separadas para que la web las haga clicables.
 - Body: cuerpo negro del álbum (la superficie con el hoyo de la bola, los cantos y el reverso): los
   huecos entre rayas se ven negros, como en el original, y por detrás no se ve la bola.
 - BackArt: contraportada en el reverso, con rayas lila, título y el tracklist.
+- BackGlass: placa de cristal gruesa y biselada, separada del reverso y encajada en el marco.
 - public/models/ball_env.jpg: panorámica renderizada desde el centro de la bola (rayas, cielo de
   estudio y una ventana de luz arriba a la izquierda) que la web usa como reflejo del cromo.
 Coordenadas de cálculo "de imagen" (0..1, y hacia abajo), medidas sobre la portada original.
@@ -58,6 +60,11 @@ TITLE_LIFT = 0.07  # el texto flota por delante de la superficie (imagen): capa 
 # del fondo de su hoyo, y el reverso queda un poco más abajo para que nunca lo atraviese
 BACK_DEPTH = DENT + BALL_R * (1 - SINK) + 0.015
 BACK_ROWS = {"top": 0.6, "step": 0.075, "half": 0.86}  # filas del tracklist del reverso (u, v)
+# placa de cristal del reverso (imagen): hueco hasta el tracklist, grosor y margen dentro del marco.
+# El marco de la web se alarga GLASS_ROOM (mundo) por detrás para encajarla: mantener a la par.
+GLASS_GAP = 0.014
+GLASS_THICK = 0.012
+GLASS_INSET = 0.004
 TRAIL_THIN = 0.0032  # medio ancho del hilo rojo (imagen)
 SMEAR = 0.2  # distancia antes de la bola en la que el hilo se abre en una mancha rosa (imagen)
 SMEAR_WIDTH = 0.026  # medio ancho de la mancha junto a la bola (imagen)
@@ -436,10 +443,74 @@ def build_back(size):
 	bm.free()
 
 
+def roughness_image(width=1024, height=512, seed=7):
+	"""Rugosidad irregular del cromo: manchas suaves, sin grano fino (de cerca se pixelaba).
+	Se calcula sobre la esfera (no sobre la UV) para que no haya costuras. Canales glTF: G = rugosidad, B = metálico (1)."""
+	rng = np.random.default_rng(seed)
+	v, u = np.mgrid[0:height, 0:width]
+	lon = (u + 0.5) / width * 2 * math.pi
+	lat = ((v + 0.5) / height - 0.5) * math.pi
+	p = np.stack((np.cos(lat) * np.cos(lon), np.cos(lat) * np.sin(lon), np.sin(lat)), axis=-1)
+	field = np.zeros((height, width))
+	for freq, weight, waves in ((2.0, 1.0, 10), (4.5, 0.6, 12), (10.0, 0.3, 16)):
+		for _ in range(waves):
+			d = rng.normal(size=3)
+			d /= np.linalg.norm(d)
+			field += weight * np.sin(p @ d * freq + rng.uniform(0, 2 * math.pi)) / math.sqrt(waves)
+	field = (field - field.mean()) / field.std()
+	rough = np.clip(0.38 + 0.1 * field, 0.22, 0.6)
+	pixels = np.ones((height, width, 4), dtype=np.float32)
+	pixels[..., 0] = rough
+	pixels[..., 1] = rough
+	img = bpy.data.images.new("ChromeRoughness", width, height, alpha=False, float_buffer=False)
+	img.colorspace_settings.name = "Non-Color"
+	img.pixels.foreach_set(pixels.ravel())
+	img.file_format = "PNG"
+	img.pack()
+	return img
+
+
+def chrome_material():
+	"""Cromo gris satinado (no espejo) con rugosidad irregular: el reflejo se difumina a manchas."""
+	mat = material("Chrome", (0.66, 0.66, 0.7), 1.0, 0.4)
+	nodes, links = mat.node_tree.nodes, mat.node_tree.links
+	bsdf = next(n for n in nodes if n.type == "BSDF_PRINCIPLED")
+	tex = nodes.new("ShaderNodeTexImage")
+	tex.image = roughness_image()
+	split = nodes.new("ShaderNodeSeparateColor")
+	links.new(tex.outputs["Color"], split.inputs["Color"])
+	links.new(split.outputs["Green"], bsdf.inputs["Roughness"])
+	return mat
+
+
+def build_glass():
+	"""Placa de cristal gruesa sobre el reverso, encajada en el marco (que la web hace más hondo):
+	separada del tracklist y con cantos biselados que atrapan la luz, para que se lea su grosor."""
+	inner = -BACK_DEPTH * 2 - GLASS_GAP * 2  # cara que mira al tracklist (mundo)
+	outer = inner - GLASS_THICK * 2  # cara exterior, la que ve quien mira la contraportada
+	half = 1 - GLASS_INSET * 2  # un pelo más pequeña que la ventana: el bisel se ve dentro del marco
+	bm = bmesh.new()
+	bmesh.ops.create_cube(bm, size=1.0)
+	for v in bm.verts:
+		v.co = Vector((v.co.x * 2 * half, v.co.y * 2 * half, (inner + outer) / 2 + v.co.z * (inner - outer)))
+	bmesh.ops.bevel(bm, geom=list(bm.edges), offset=GLASS_THICK * 0.7, segments=4, profile=0.5, affect="EDGES")
+	mat = material("Glass", (0.92, 0.9, 1.0), 0.0, 0.05)
+	bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+	bsdf.inputs["Alpha"].default_value = 0.12  # dos caras: cuenta doble
+	mat.surface_render_method = "BLENDED"
+	mesh = bpy.data.meshes.new("BackGlass")
+	bm.to_mesh(mesh)
+	bm.free()
+	mesh.set_sharp_from_angle(angle=math.radians(40))  # caras planas, cantos redondeados suaves
+	mesh.materials.append(mat)
+	obj = bpy.data.objects.new("BackGlass", mesh)
+	bpy.context.collection.objects.link(obj)
+
+
 def clear_scene():
 	for ob in list(bpy.data.objects):
 		bpy.data.objects.remove(ob, do_unlink=True)
-	for coll in (bpy.data.meshes, bpy.data.materials, bpy.data.cameras, bpy.data.lights, bpy.data.curves):
+	for coll in (bpy.data.meshes, bpy.data.materials, bpy.data.cameras, bpy.data.lights, bpy.data.curves, bpy.data.images):
 		for item in list(coll):
 			if item.users == 0:
 				coll.remove(item)
@@ -460,13 +531,13 @@ def build():
 	)
 	ball = bpy.context.active_object
 	ball.name = "Ball"
-	# cromo gris satinado (no espejo): metálico con algo de rugosidad, el entorno se difumina
-	ball.data.materials.append(material("Chrome", (0.66, 0.66, 0.7), 1.0, 0.3))
+	ball.data.materials.append(chrome_material())
 	bpy.ops.object.shade_smooth()
 
 	size = title_size()
 	build_title(size)
 	build_back(size)
+	build_glass()
 
 
 def render_ball_env():
@@ -550,7 +621,7 @@ def render_ball_env():
 def export():
 	os.makedirs(os.path.dirname(OUT), exist_ok=True)
 	bpy.ops.object.select_all(action="DESELECT")
-	for name in ("Ball", "Stripes", "Trail", "TitleBand", "TitleAlbum", "Body", "BackArt"):
+	for name in ("Ball", "Stripes", "Trail", "TitleBand", "TitleAlbum", "Body", "BackArt", "BackGlass"):
 		bpy.data.objects[name].select_set(True)
 	bpy.ops.export_scene.gltf(
 		filepath=OUT,

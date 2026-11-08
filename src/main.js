@@ -9,6 +9,8 @@ import { ballSwell, createBeat } from "./beat.js";
 import { mountPanel } from "./panel.js";
 import { mountSheet } from "./sheet.js";
 import { createHalo } from "./halo.js";
+import { createIdle } from "./idle.js";
+import { createLetters } from "./letters.js";
 import { glareShader } from "./shaders.js";
 import { TRACKS } from "./tracks.js";
 import { drawVisualizer } from "./visualizer.js";
@@ -18,6 +20,7 @@ const MAX_TILT = { x: 0.35, y: 0.5 }; // radianes
 const COVER = 2; // la portada mide 2x2 (igual que en Blender)
 const FLOOR_DEPTH = 0.14; // la superficie queda dentro de la caja del marco; el relieve y el texto suben hasta su borde
 const ALBUM_DEPTH = 0.3; // grosor del cuerpo del álbum de Blender (2 · BACK_DEPTH), con la contraportada
+const GLASS_ROOM = 0.06; // el marco sigue por detrás para encajar la placa de cristal (GLASS_* en Blender)
 const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
 let reducedMotion = motionPreference.matches;
 motionPreference.addEventListener("change", (e) => { reducedMotion = e.matches; });
@@ -33,15 +36,20 @@ const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 50);
 const backdrop = createBackdrop(); // fondo de rayas que ondulan con la música
 scene.add(backdrop.mesh);
 
-// Cámara libre: arrastrar gira, la rueda (o pellizcar) acerca y el botón derecho (o dos dedos) desplaza
+// Cámara: arrastrar con el botón izquierdo gira y la rueda (o pellizcar) acerca; sin desplazar la vista
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
+controls.enablePan = false; // el botón derecho no hace nada: solo girar y acercar
 controls.rotateSpeed = 0.45; // sin límite horizontal: se puede dar la vuelta para ver la contraportada
 controls.minPolarAngle = 0.17;
 controls.maxPolarAngle = Math.PI - 0.17;
 let dragging = false;
-controls.addEventListener("start", () => (dragging = true));
+const idle = createIdle(); // tras unos segundos sin entrada, la portada se balancea sola
+controls.addEventListener("start", () => {
+	dragging = true;
+	idle.poke();
+});
 controls.addEventListener("end", () => (dragging = false));
 
 scene.add(new THREE.HemisphereLight(0xd8c8ff, 0x1a0820, 1.2));
@@ -76,7 +84,7 @@ const frameShape = roundedRect(COVER + 0.12, 0.06);
 frameShape.holes.push(roundedRect(COVER, 0.001));
 const frame = new THREE.Mesh(
 	new THREE.ExtrudeGeometry(frameShape, {
-		depth: FLOOR_DEPTH + ALBUM_DEPTH - 0.02,
+		depth: FLOOR_DEPTH + ALBUM_DEPTH + GLASS_ROOM - 0.02,
 		bevelEnabled: true,
 		bevelThickness: 0.015,
 		bevelSize: 0.015,
@@ -84,7 +92,7 @@ const frame = new THREE.Mesh(
 	}),
 	new THREE.MeshStandardMaterial({ color: 0x1c0d26, metalness: 0.3, roughness: 0.45 }),
 );
-frame.position.z = -FLOOR_DEPTH - ALBUM_DEPTH; // cubre los cantos del álbum, de la contraportada a la superficie
+frame.position.z = -FLOOR_DEPTH - ALBUM_DEPTH - GLASS_ROOM; // cubre los cantos, del cristal trasero a la superficie
 cover.add(frame);
 
 // La portada es una ventana: la escena 3D queda detrás y estos planos (en el espacio de la
@@ -123,7 +131,7 @@ ballEnv.mapping = THREE.EquirectangularReflectionMapping;
 ballEnv.colorSpace = THREE.SRGBColorSpace;
 
 // Piezas de Blender con interacción
-const parts = { ball: null, body: null, back: null, stripes: null, trail: null };
+const parts = { ball: null, body: null, back: null, glass: null, stripes: null, trail: null };
 
 // Franja dorada sobre el tema que suena en el tracklist de la contraportada
 const backMarker = new THREE.Mesh(
@@ -141,6 +149,7 @@ function placeBackMarker(index) {
 	backMarker.visible = true;
 }
 let model = null;
+const letters = createLetters(); // títulos de la portada y temas del reverso, que siguen a la música
 const halo = createHalo(clipPlanes); // resplandor y anillo del latido alrededor de la bola
 
 // Pantalla de carga: una bola cromada que respira mientras llega el modelo. Después la portada
@@ -171,6 +180,15 @@ loader.load("models/currents.glb", (gltf) => {
 			halo.place(obj.position, obj.userData.radius);
 		}
 		if (obj.name === "Body") parts.body = obj;
+		if (obj.material.name === "Title" || obj.material.name === "BackTitle") letters.add(obj.material);
+		if (obj.name === "BackGlass") {
+			// lámina de plástico o cristal sobre la contraportada: refleja el mismo entorno que la bola
+			parts.glass = obj;
+			obj.material.envMap = ballEnv;
+			obj.material.envMapIntensity = 1.5;
+			obj.material.depthWrite = false;
+			obj.renderOrder = 2; // después de la franja del tema que suena
+		}
 		if (obj.name === "Stripes") {
 			parts.stripes = obj;
 			addWaves(obj.material);
@@ -212,7 +230,12 @@ const panel = mountPanel(document, player, TRACKS, (state) => {
 const tracklist = document.querySelector("#tracklist");
 const setTracklist = panel.setOpen;
 
+// Reposo: sin entrada durante unos segundos, la portada se balancea sola mirando al frente
+const poke = () => idle.poke();
+for (const name of ["pointerdown", "pointermove", "wheel", "touchstart"]) window.addEventListener(name, poke, { passive: true });
+
 window.addEventListener("keydown", (e) => {
+	poke();
 	if (e.repeat || e.defaultPrevented || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
 	if (e.target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName)) return;
 	const k = e.key.toLowerCase();
@@ -363,12 +386,29 @@ function adaptQuality() {
 	frames = -1;
 }
 
+// En reposo la cámara vuelve poco a poco a la vista de frente (por el camino corto), sin cambiar
+// el zoom: así el balanceo siempre enseña la parte de delante.
+const orbit = new THREE.Spherical();
+const offset = new THREE.Vector3();
+function returnToFront(weight, dt) {
+	if (!controls.target0) return;
+	const k = Math.min(1, dt * 0.9) * weight;
+	controls.target.lerp(controls.target0, k);
+	orbit.setFromVector3(offset.copy(camera.position).sub(controls.target));
+	const turn = Math.atan2(Math.sin(-orbit.theta), Math.cos(-orbit.theta)); // de theta a 0
+	orbit.theta += turn * k;
+	orbit.phi += (Math.PI / 2 - orbit.phi) * k;
+	camera.position.setFromSpherical(orbit).add(controls.target);
+}
+
 const clipNormalMatrix = new THREE.Matrix3();
 const startedAt = performance.now();
 const beat = createBeat();
 let lastFrame = 0;
 renderer.setAnimationLoop(() => {
 	const t = (performance.now() - startedAt) / 1000;
+	const dt = Math.min(t - lastFrame, 0.1);
+	lastFrame = t;
 	adaptQuality();
 	controls.update();
 	tilt.lerp(target, 0.08);
@@ -381,7 +421,9 @@ renderer.setAnimationLoop(() => {
 	const intro = introAt === null || reducedMotion ? 1 : Math.max(0, Math.min((t - introAt - 0.2) / INTRO, 1));
 	const ease = intro * intro * (3 - 2 * intro); // arranque y llegada sin aceleraciones bruscas
 	cover.scale.setScalar(0.82 + 0.18 * ease);
-	cover.rotation.y = tilt.x * MAX_TILT.y - (1 - ease) * Math.PI * 0.55;
+	const rest = reducedMotion ? { angle: 0, weight: 0 } : idle.update(dt);
+	if (rest.weight > 0 && !dragging) returnToFront(rest.weight, dt);
+	cover.rotation.y = tilt.x * MAX_TILT.y - (1 - ease) * Math.PI * 0.55 + rest.angle;
 	cover.rotation.x = tilt.y * MAX_TILT.x;
 
 	glareUniforms.uPointer.value.set(0.5 + tilt.x * 0.5, 0.5 - tilt.y * 0.5);
@@ -398,8 +440,6 @@ renderer.setAnimationLoop(() => {
 	waveUniforms.uTime.value = t;
 	waveUniforms.uBass.value = THREE.MathUtils.lerp(waveUniforms.uBass.value, reducedMotion ? 0 : bass, 0.3);
 	// la bola late con cada golpe de graves (bump rápido que se relaja) y respira con el volumen
-	const dt = Math.min(t - lastFrame, 0.1);
-	lastFrame = t;
 	const pulse = reducedMotion ? 0 : beat.update(kick, dt);
 	if (parts.ball) {
 		// late hacia arriba: la base sigue en el fondo del hoyo y nunca asoma por la contraportada
@@ -410,11 +450,13 @@ renderer.setAnimationLoop(() => {
 	halo.update(pulse, reducedMotion ? 99 : beat.age);
 	waveUniforms.uPulse.value = pulse;
 	waveUniforms.uBeatAge.value = beat.age;
+	letters.update({ dt, playing: player.state().playing, bass, mid, pulse, motion: !reducedMotion });
 	backdrop.update({ dt, bass, mid, pulse, beatAge: beat.age, aspect: camera.aspect, motion: !reducedMotion });
 	if (!tracklist.hidden) drawVisualizer(panel.context, panel.width, panel.height, freq, t);
 
 	// el entorno del reflejo gira con la portada
 	if (parts.ball) parts.ball.material.envMapRotation.copy(cover.rotation);
+	if (parts.glass) parts.glass.material.envMapRotation.copy(cover.rotation);
 
 	renderer.render(scene, camera);
 });

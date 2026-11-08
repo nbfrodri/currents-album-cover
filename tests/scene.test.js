@@ -12,6 +12,8 @@ import * as beat from "../src/beat.js";
 import * as back from "../src/back.js";
 import * as backdrop from "../src/backdrop.js";
 import * as halo from "../src/halo.js";
+import * as idle from "../src/idle.js";
+import * as letters from "../src/letters.js";
 
 function setup(orientation) {
 	const listeners = new Map();
@@ -63,7 +65,12 @@ function setup(orientation) {
 		}
 	}
 	class Controls {
-		constructor(camera) { this.camera = camera; this.listeners = {}; }
+		constructor(camera) {
+			this.camera = camera;
+			this.listeners = {};
+			this.target = new THREE.Vector3();
+			this.target0 = new THREE.Vector3();
+		}
 		addEventListener(name, callback) { this.listeners[name] = callback; }
 		update() {}
 		saveState() {}
@@ -73,7 +80,7 @@ function setup(orientation) {
 	const context = vm.createContext({
 		THREE: { ...THREE, WebGLRenderer: Renderer, TextureLoader: Loader }, ...shaders,
 		GLTFLoader: Loader, DRACOLoader: Loader, OrbitControls: Controls,
-		...tracks, ...panel, ...sheet, ...waves, ...beat, ...back, ...backdrop, ...halo,
+		...tracks, ...panel, ...sheet, ...waves, ...beat, ...back, ...backdrop, ...halo, ...idle, ...letters,
 		drawVisualizer() {},
 		createPlayer() {
 			let listener = null, playing = false, index = 0;
@@ -283,8 +290,11 @@ test("los planos conservan el interior y recortan el exterior al inclinar", () =
 
 test("mover el ratón no inclina ni balancea la portada: solo se mueve al arrastrar", () => {
 	const app = setup();
-	assert.equal(app.listeners.has("pointermove"), false);
-	for (let i = 0; i < 120; i++) app.run("renderer.frame(16.67)"); // sin tocar nada: antes se balanceaba sola
+	// el movimiento del ratón solo reinicia el reposo; no inclina la portada
+	for (let i = 0; i < 120; i++) {
+		app.listeners.get("pointermove")({ clientX: i * 5, clientY: i * 3 });
+		app.run("renderer.frame(16.67)");
+	}
 	assert.equal(app.run("cover.rotation.x"), 0);
 	assert.equal(app.run("cover.rotation.y"), 0);
 });
@@ -314,4 +324,26 @@ test("el giroscopio inclina la portada y las lecturas inválidas del sensor se i
 	assert.equal(app.run("target.x"), 1);
 	app.preference.change({ matches: false });
 	assert.equal(app.run("reducedMotion"), false);
+});
+
+test("el botón derecho no desplaza la vista: solo girar y acercar", () => {
+	const app = setup();
+	assert.equal(app.run("controls.enablePan"), false);
+});
+
+test("en reposo la cámara vuelve al frente y la portada se balancea sin enseñar el reverso", () => {
+	const app = setup();
+	app.preference.change({ matches: false });
+	// cámara detrás de la portada, modelo ya cargado y entrada terminada
+	app.run("let clock = startedAt; performance = { now: () => clock }; model = new THREE.Group(); camera.position.set(0.3, 0, -camera.position.length())");
+	let maxSway = 0;
+	for (let i = 0; i < 60 * 30; i++) {
+		app.run("clock += 1000 / 60; renderer.frame()");
+		if (i > 60 * 6) maxSway = Math.max(maxSway, Math.abs(app.run("cover.rotation.y")));
+	}
+	assert.ok(app.run("camera.position.z > 0 && Math.abs(camera.position.x) < 0.05 * camera.position.z")); // de frente
+	assert.ok(maxSway > 0.2 && maxSway < Math.PI / 2 - 0.5); // se mueve, pero siempre de cara
+	app.listeners.get("pointermove")();
+	for (let i = 0; i < 120; i++) app.run("clock += 1000 / 60; renderer.frame()");
+	assert.ok(Math.abs(app.run("cover.rotation.y")) < 1e-6); // al tocar, vuelve al control del usuario
 });

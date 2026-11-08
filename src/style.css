@@ -16,7 +16,7 @@
 
 :root {
 	--ink: #07030b;
-	--slate: #4a5868; /* fondo azul grisáceo (el mismo que el del lienzo) */
+	--night: #241433; /* fondo morado oscuro (el mismo que el del lienzo) */
 	--panel: rgb(12 5 18 / 0.86);
 	--line: rgb(201 174 242 / 0.18);
 	--lilac: #c9aef2;
@@ -34,7 +34,7 @@
 html,
 body {
 	height: 100%;
-	background: radial-gradient(circle at 50% 40%, #56657a 0%, var(--slate) 70%);
+	background: radial-gradient(circle at 50% 40%, #33204a 0%, var(--night) 70%);
 	color: var(--text);
 	font-family: "Archivo Expanded", system-ui, sans-serif;
 	font-weight: 500;
@@ -388,31 +388,39 @@ input:focus-visible {
 	scrollbar-gutter: stable;
 }
 
-/* Barra de scroll: una raya lila fina sobre negro, como las de la portada; dorada al usarla */
-.tracks::-webkit-scrollbar {
+/* Barra de scroll (tracklist y ficha): una raya lila fina sobre negro, como las de la portada;
+dorada al usarla */
+.tracks::-webkit-scrollbar,
+.sheet-content::-webkit-scrollbar {
 	width: 6px;
 }
 
-.tracks::-webkit-scrollbar-track {
+.tracks::-webkit-scrollbar-track,
+.sheet-content::-webkit-scrollbar-track {
 	background: transparent;
 }
 
-.tracks::-webkit-scrollbar-thumb {
+.tracks::-webkit-scrollbar-thumb,
+.sheet-content::-webkit-scrollbar-thumb {
 	background: rgb(201 174 242 / 0.45);
 	border-radius: 3px;
 }
 
 .tracks::-webkit-scrollbar-thumb:hover,
-.tracks::-webkit-scrollbar-thumb:active {
+.tracks::-webkit-scrollbar-thumb:active,
+.sheet-content::-webkit-scrollbar-thumb:hover,
+.sheet-content::-webkit-scrollbar-thumb:active {
 	background: var(--gold);
 }
 
-.tracks::-webkit-scrollbar-button {
+.tracks::-webkit-scrollbar-button,
+.sheet-content::-webkit-scrollbar-button {
 	display: none;
 }
 
 @supports not selector(::-webkit-scrollbar) {
-	.tracks {
+	.tracks,
+	.sheet-content {
 		scrollbar-width: thin;
 		scrollbar-color: rgb(201 174 242 / 0.45) transparent;
 	}
@@ -732,7 +740,7 @@ input:focus-visible {
 	justify-content: center;
 	gap: 28px;
 	padding: 16px;
-	background: var(--slate);
+	background: var(--night);
 	transition: opacity 1s ease, visibility 0s linear 1s;
 }
 
